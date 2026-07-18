@@ -12,9 +12,14 @@ import { LoadingState, ErrorState } from "@/components/ui/states";
 import { WeekStrip } from "@/components/home/week-strip";
 import { StatGrid } from "@/components/home/stat-grid";
 import { fetchEffectiveWeekSchedule } from "@/features/splits/split-service";
-import { fetchActiveWorkout, fetchWorkoutHistory, startWorkout } from "@/features/workouts/workout-service";
+import {
+  ActiveWorkoutConflictError,
+  fetchActiveWorkout,
+  fetchWorkoutHistory,
+  startWorkout,
+} from "@/features/workouts/workout-service";
 import { friendlyError } from "@/lib/supabase/errors";
-import { toISODateOnly } from "@/lib/utils/date";
+import { formatShortDate, toISODateOnly } from "@/lib/utils/date";
 import { spacing } from "@/lib/theme/tokens";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
@@ -22,7 +27,7 @@ import { useSessionStore } from "@/stores/session-store";
 import type { WeeklyScheduleDayWithDetails, WorkoutSessionWithDetails } from "@/types";
 
 export default function HomeScreen() {
-  const { t, rowDirection } = useTranslation();
+  const { t, language, rowDirection } = useTranslation();
   const { colors } = useAppTheme();
   const router = useRouter();
   const user = useSessionStore((state) => state.user);
@@ -76,8 +81,14 @@ export default function HomeScreen() {
 
   const today = schedule.find((day) => day.scheduleDate === toISODateOnly()) ?? null;
   const rest = today?.workoutType === "rest";
+  const activeMatchesToday = Boolean(
+    active
+    && today
+    && active.scheduledDate === today.scheduleDate
+    && active.splitDayId === today.sourceSplitDayId,
+  );
 
-  async function begin() {
+  async function begin(replaceExisting = false) {
     if (!user || !membership || !today || rest || !today.sourceSplitDayId) return;
     setStarting(true);
     try {
@@ -87,9 +98,31 @@ export default function HomeScreen() {
         splitDayId: today.sourceSplitDayId,
         exercises: today.exercises,
         scheduledDate: today.scheduleDate,
+        replaceExisting,
       });
       router.push(`/workout/${session.id}`);
     } catch (caught) {
+      if (caught instanceof ActiveWorkoutConflictError) {
+        Alert.alert(
+          language === "ar" ? "في تمرينة قديمة شغالة" : "Another workout is active",
+          language === "ar"
+            ? `التمرينة المفتوحة بتاريخ ${formatShortDate(caught.activeSession.scheduledDate, language)}. اختار تكملها أو تلغيها وتبدأ تمرينة النهارده.`
+            : `The open workout is dated ${formatShortDate(caught.activeSession.scheduledDate, language)}. Continue it or replace it with today's plan.`,
+          [
+            { text: t("common.cancel"), style: "cancel" },
+            {
+              text: language === "ar" ? "كمّل القديمة" : "Continue old",
+              onPress: () => router.push(`/workout/${caught.activeSession.id}`),
+            },
+            {
+              text: language === "ar" ? "ابدأ النهارده" : "Start today",
+              style: "destructive",
+              onPress: () => void begin(true),
+            },
+          ],
+        );
+        return;
+      }
       Alert.alert(t("common.error"), friendlyError(caught));
     } finally {
       setStarting(false);
@@ -107,10 +140,20 @@ export default function HomeScreen() {
             {rest ? <MoonStar color={colors.warning} size={28} /> : <Dumbbell color={colors.primary} size={28} />}
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-            <AppText variant="title3">{active ? t("home.continue") : rest ? t("home.recovery") : today?.displayName ?? t("home.setupSplit")}</AppText>
+            <AppText variant="title3">
+              {active
+                ? activeMatchesToday
+                  ? t("home.continue")
+                  : language === "ar"
+                    ? "في تمرينة قديمة شغالة"
+                    : "Previous workout still active"
+                : rest
+                  ? t("home.recovery")
+                  : today?.displayName ?? t("home.setupSplit")}
+            </AppText>
             <AppText color="muted">
               {active
-                ? `${active.exercises.reduce((sum, exercise) => sum + exercise.sets.filter((set) => set.isCompleted).length, 0)} / ${active.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0)} ${t("common.sets")}`
+                ? `${formatShortDate(active.scheduledDate, language)} · ${active.exercises.reduce((sum, exercise) => sum + exercise.sets.filter((set) => set.isCompleted).length, 0)} / ${active.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0)} ${t("common.sets")}`
                 : rest
                   ? t("home.recoveryDesc")
                   : today
@@ -120,7 +163,14 @@ export default function HomeScreen() {
           </View>
         </View>
         {active ? (
-          <Button icon={<RotateCcw color={colors.white} size={20} />} onPress={() => router.push(`/workout/${active.id}`)}>{t("home.continue")}</Button>
+          <View style={{ gap: spacing.sm }}>
+            <Button icon={<RotateCcw color={colors.white} size={20} />} onPress={() => router.push(`/workout/${active.id}`)}>{t("home.continue")}</Button>
+            {!activeMatchesToday && today && !rest && today.exercises.length ? (
+              <Button variant="secondary" loading={starting} icon={<Play color={colors.primary} size={20} />} onPress={() => void begin()}>
+                {language === "ar" ? "ابدأ تمرينة النهارده" : "Start today's workout"}
+              </Button>
+            ) : null}
+          </View>
         ) : today && !rest && today.exercises.length ? (
           <Button loading={starting} icon={<Play color={colors.white} size={20} />} onPress={() => void begin()}>{t("home.start")}</Button>
         ) : !today ? (

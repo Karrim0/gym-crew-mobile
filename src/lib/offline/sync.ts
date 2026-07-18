@@ -149,3 +149,20 @@ export async function pendingSyncCount() {
   const row = await db.getFirstAsync<{ count: number }>("SELECT COUNT(*) AS count FROM sync_queue");
   return row?.count ?? 0;
 }
+
+export async function hasPendingEntitySync(entity: SyncEntity, entityId: string) {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ payload: string }>(
+    "SELECT payload FROM sync_queue WHERE entity = ? ORDER BY created_at DESC",
+    entity,
+  );
+
+  return rows.some((row) => {
+    try {
+      const payload = JSON.parse(row.payload) as { id?: string };
+      return payload.id === entityId;
+    } catch {
+      return false;
+    }
+  });
+}

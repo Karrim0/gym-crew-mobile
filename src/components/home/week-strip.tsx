@@ -5,7 +5,7 @@ import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useSettingsStore } from "@/stores/settings-store";
 import { weekdayLabel } from "@/constants/schedule";
 import type { WeeklyScheduleDayWithDetails } from "@/types";
-import { toISODateOnly } from "@/lib/utils/date";
+import { getWeekdayFromISODate, toISODateOnly } from "@/lib/utils/date";
 
 export function WeekStrip({ days }: { days: WeeklyScheduleDayWithDetails[] }) {
   const { colors } = useAppTheme();
@@ -32,7 +32,7 @@ export function WeekStrip({ days }: { days: WeeklyScheduleDayWithDetails[] }) {
             }}
           >
             <AppText variant="caption" color={selected ? "primary" : "muted"} align="center">
-              {weekdayLabel(day.sourceDay?.weekday ?? "saturday", language)}
+              {weekdayLabel(getWeekdayFromISODate(day.scheduleDate), language)}
             </AppText>
             <AppText variant="smallBold" align="center" numberOfLines={2}>
               {rest ? (language === "ar" ? "راحة" : "Rest") : day.displayName}

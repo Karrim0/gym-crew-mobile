@@ -1,5 +1,7 @@
 import type { Weekday } from "@/types/domain";
 
+const ISO_DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 export const weekdayOrder: Weekday[] = [
   "saturday",
   "sunday",
@@ -17,9 +19,44 @@ export function toISODateOnly(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Parses a database `date` value as a local calendar day.
+ *
+ * `new Date("2026-07-18")` is interpreted as UTC by JavaScript, which can
+ * move the value to the previous day in some timezones. Constructing the
+ * date from its parts keeps schedule calculations on the device's local day.
+ */
+export function parseISODateOnly(value: string) {
+  const match = ISO_DATE_ONLY_PATTERN.exec(value);
+  if (!match) throw new Error(`Invalid ISO date-only value: ${value}`);
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(year, month - 1, day, 12, 0, 0, 0);
+
+  if (
+    parsed.getFullYear() !== year
+    || parsed.getMonth() !== month - 1
+    || parsed.getDate() !== day
+  ) {
+    throw new Error(`Invalid ISO date-only value: ${value}`);
+  }
+
+  return parsed;
+}
+
+export function normalizeISODateOnly(value: string) {
+  return toISODateOnly(parseISODateOnly(value));
+}
+
 export function getWeekday(date = new Date()): Weekday {
   const map: Weekday[] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
   return map[date.getDay()];
+}
+
+export function getWeekdayFromISODate(value: string): Weekday {
+  return getWeekday(parseISODateOnly(value));
 }
 
 export function startOfTrainingWeek(date = new Date()) {
@@ -34,6 +71,18 @@ export function addDays(date: Date, days: number) {
   const copy = new Date(date);
   copy.setDate(copy.getDate() + days);
   return copy;
+}
+
+export function getTrainingWeekRange(anchor: Date | string = new Date()) {
+  const anchorDate = typeof anchor === "string" ? parseISODateOnly(anchor) : anchor;
+  const start = startOfTrainingWeek(anchorDate);
+  const end = addDays(start, 6);
+  return {
+    start,
+    end,
+    startISO: toISODateOnly(start),
+    endISO: toISODateOnly(end),
+  };
 }
 
 export function formatClock(seconds: number) {

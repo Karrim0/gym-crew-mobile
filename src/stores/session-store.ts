@@ -40,7 +40,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   initialize: async () => {
     const { data, error } = await supabase.auth.getSession();
     const session = data.session;
-    set({ session, user: session?.user ?? null, error: error?.message ?? null });
+    set({
+      session,
+      user: session?.user ?? null,
+      loadingContext: Boolean(session?.user),
+      error: error?.message ?? null,
+    });
     if (session?.user) {
       try {
         const context = await loadContext(session.user.id);
@@ -49,19 +54,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         set({ error: caught instanceof Error ? caught.message : String(caught) });
       }
     }
-    set({ initialized: true });
+    set({ initialized: true, loadingContext: false });
 
     const { data: subscription } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      set({ session: nextSession, user: nextSession?.user ?? null, error: null });
+      set({
+        session: nextSession,
+        user: nextSession?.user ?? null,
+        loadingContext: Boolean(nextSession?.user),
+        error: null,
+      });
       if (nextSession?.user) {
         try {
           const context = await loadContext(nextSession.user.id);
           set(context);
         } catch (caught) {
           set({ error: caught instanceof Error ? caught.message : String(caught) });
+        } finally {
+          set({ loadingContext: false });
         }
       } else {
-        set({ profile: null, membership: null });
+        set({ profile: null, membership: null, loadingContext: false });
       }
     });
 
@@ -82,12 +94,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
   },
 
-  clear: () => set({ session: null, user: null, profile: null, membership: null }),
+  clear: () => set({ session: null, user: null, profile: null, membership: null, loadingContext: false }),
 
   signOutLocal: async () => {
     const userId = get().user?.id;
     if (userId) await clearUserLocalData(userId);
     await supabase.auth.signOut();
-    set({ session: null, user: null, profile: null, membership: null });
+    set({ session: null, user: null, profile: null, membership: null, loadingContext: false });
   },
 }));

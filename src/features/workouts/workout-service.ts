@@ -5,8 +5,9 @@ import {
   getCachedActiveWorkout,
   getCachedWorkout,
   getCachedWorkoutHistory,
+  removeCachedWorkout,
 } from "@/lib/offline/database";
-import { enqueueSync, flushSyncQueue } from "@/lib/offline/sync";
+import { enqueueSync, flushSyncQueue, hasPendingEntitySync } from "@/lib/offline/sync";
 import { createId } from "@/lib/utils/id";
 import { toISODateOnly } from "@/lib/utils/date";
 import type {
@@ -28,6 +29,13 @@ type ExerciseQueryRow = WorkoutExerciseRow & { exercises: ExerciseRow; workout_s
 type SessionQueryRow = SessionRow & { workout_exercises: ExerciseQueryRow[] };
 
 const SESSION_SELECT = "*, workout_exercises(*, exercises(*), workout_sets(*))";
+
+export class ActiveWorkoutConflictError extends Error {
+  constructor(public readonly activeSession: WorkoutSessionWithDetails) {
+    super("A different workout is already in progress.");
+    this.name = "ActiveWorkoutConflictError";
+  }
+}
 
 function mapSet(row: WorkoutSetRow): WorkoutSet {
   return {
@@ -90,20 +98,35 @@ export async function fetchWorkoutSession(sessionId: UUID) {
 
 export async function fetchActiveWorkout(userId: UUID) {
   const local = await getCachedActiveWorkout(userId);
-  if (local) return local;
-  const { data, error } = await supabase
-    .from("workout_sessions")
-    .select(SESSION_SELECT)
-    .eq("user_id", userId)
-    .eq("status", "in_progress")
-    .order("started_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) return null;
-  const session = mapSession(data as unknown as SessionQueryRow);
-  await cacheWorkout(session);
-  return session;
+  try {
+    const { data, error } = await supabase
+      .from("workout_sessions")
+      .select(SESSION_SELECT)
+      .eq("user_id", userId)
+      .eq("status", "in_progress")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+
+    if (data) {
+      const session = mapSession(data as unknown as SessionQueryRow);
+      await cacheWorkout(session);
+      return session;
+    }
+
+    // A local in-progress session can be a legitimate offline workout. Keep
+    // it only while its session mutation is still waiting to reach Supabase.
+    if (local && await hasPendingEntitySync("workoutSession", local.id)) return local;
+
+    // Supabase is reachable and confirms there is no active workout. Remove a
+    // stale local ghost so it cannot hijack today's Start Workout action.
+    if (local) await removeCachedWorkout(local.id);
+    return null;
+  } catch {
+    // Offline/network failure: local data remains the source of truth.
+    return local;
+  }
 }
 
 export async function fetchWorkoutHistory(userId: UUID, limit = 50) {
@@ -168,9 +191,17 @@ export async function startWorkout(input: {
   splitDayId: UUID | null;
   exercises: SplitExerciseWithDetails[];
   scheduledDate?: string;
+  replaceExisting?: boolean;
 }) {
+  const scheduledDate = input.scheduledDate ?? toISODateOnly();
   const existing = await fetchActiveWorkout(input.userId).catch(() => getCachedActiveWorkout(input.userId));
-  if (existing) return existing;
+  if (existing) {
+    const belongsToRequestedWorkout = existing.scheduledDate === scheduledDate
+      && existing.splitDayId === input.splitDayId;
+    if (belongsToRequestedWorkout) return existing;
+    if (!input.replaceExisting) throw new ActiveWorkoutConflictError(existing);
+    await cancelWorkout(existing.id);
+  }
 
   const now = new Date().toISOString();
   const sessionId = createId();
@@ -180,7 +211,7 @@ export async function startWorkout(input: {
     userId: input.userId,
     groupId: input.groupId,
     splitDayId: input.splitDayId,
-    scheduledDate: input.scheduledDate ?? toISODateOnly(),
+    scheduledDate,
     status: "in_progress",
     notes: "",
     durationSeconds: 0,

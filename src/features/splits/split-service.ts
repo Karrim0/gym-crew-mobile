@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/database.types";
 import { cacheValue, readCachedValue } from "@/lib/offline/database";
-import { addDays, startOfTrainingWeek, toISODateOnly } from "@/lib/utils/date";
+import { getTrainingWeekRange, normalizeISODateOnly, toISODateOnly } from "@/lib/utils/date";
 import type {
   Exercise,
   SplitDayColorKey,
@@ -95,18 +95,20 @@ export async function fetchPersonalSplit(userId: UUID): Promise<SplitDayWithDeta
 }
 
 export async function fetchEffectiveWeekSchedule(userId: UUID, anchorDate = toISODateOnly()) {
-  const cacheKey = `week-schedule:${userId}:${anchorDate}`;
+  const normalizedAnchor = normalizeISODateOnly(anchorDate);
+  const { startISO, endISO } = getTrainingWeekRange(normalizedAnchor);
+  // Cache by training week, not by the day that happened to request it. This
+  // keeps the same cached plan usable after midnight while the week is active.
+  const cacheKey = `week-schedule:${userId}:${startISO}`;
   try {
-    const { error: ensureError } = await supabase.rpc("ensure_week_schedule", { target_anchor_date: anchorDate });
+    const { error: ensureError } = await supabase.rpc("ensure_week_schedule", { target_anchor_date: normalizedAnchor });
     if (ensureError) throw ensureError;
-    const start = startOfTrainingWeek(new Date(`${anchorDate}T12:00:00`));
-    const end = addDays(start, 6);
     const { data, error } = await supabase
       .from("weekly_schedule_days")
       .select("*, split_days:source_split_day_id(*, split_exercises(*, exercises(*)))")
       .eq("user_id", userId)
-      .gte("schedule_date", toISODateOnly(start))
-      .lte("schedule_date", toISODateOnly(end))
+      .gte("schedule_date", startISO)
+      .lte("schedule_date", endISO)
       .order("schedule_date", { ascending: true });
     if (error) throw error;
     const schedule = (data as unknown as WeeklyScheduleQueryRow[]).map(mapWeekly);

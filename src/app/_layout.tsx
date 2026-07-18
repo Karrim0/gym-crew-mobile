@@ -17,11 +17,12 @@ function RouteGuard() {
   const router = useRouter();
   const segments = useSegments();
   const initialized = useSessionStore((state) => state.initialized);
+  const loadingContext = useSessionStore((state) => state.loadingContext);
   const session = useSessionStore((state) => state.session);
   const membership = useSessionStore((state) => state.membership);
 
   useEffect(() => {
-    if (!initialized) return;
+    if (!initialized || loadingContext) return;
     const group = segments[0];
     const inAuth = group === "(auth)";
     const inOnboarding = group === "(onboarding)";
@@ -37,7 +38,7 @@ function RouteGuard() {
     if (session && membership && (inAuth || inOnboarding)) {
       router.replace("/(tabs)/home");
     }
-  }, [initialized, membership, router, segments, session]);
+  }, [initialized, loadingContext, membership, router, segments, session]);
 
   return null;
 }
