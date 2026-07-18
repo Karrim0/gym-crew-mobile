@@ -16,7 +16,7 @@ export async function prepareNotifications() {
       name: "Rest timer",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 200, 100, 300],
-      sound: "rest-complete.wav",
+      sound: "rest_complete.wav",
     });
   }
 }
@@ -37,7 +37,7 @@ export async function scheduleRestComplete(seconds: number, language: "ar" | "en
     content: {
       title: language === "ar" ? "الراحة خلصت" : "Rest complete",
       body: language === "ar" ? "يلا السِت الجاية." : "Ready for your next set.",
-      sound: "rest-complete.wav",
+      sound: "rest_complete.wav",
       data: { route: "/(tabs)/workout" },
     },
     trigger: {

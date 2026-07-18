@@ -4,7 +4,7 @@ import { useAudioPlayer } from "expo-audio";
 import { useRestTimerStore } from "@/stores/rest-timer-store";
 import { useSettingsStore } from "@/stores/settings-store";
 
-const sound = require("../../../assets/sounds/rest-complete.wav");
+const sound = require("../../../assets/sounds/rest_complete.wav");
 
 export function useRestTimer() {
   const active = useRestTimerStore((state) => state.active);

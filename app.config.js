@@ -65,7 +65,7 @@ owner: "kaghim0s-team",
     [
       "expo-notifications",
       {
-        sounds: ["./assets/sounds/rest-complete.wav"],
+        sounds: ["./assets/sounds/rest_complete.wav"],
         defaultChannel: "rest-timer",
       },
     ],

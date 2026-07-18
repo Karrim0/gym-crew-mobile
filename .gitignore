@@ -41,3 +41,11 @@ example
 # generated native folders
 /ios
 /android
+.env.local
+.env
+.eas-inspect/
+android/
+ios/
+node_modules/
+.expo/
+*.zip
