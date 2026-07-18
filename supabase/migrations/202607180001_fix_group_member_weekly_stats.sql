@@ -106,9 +106,18 @@ BEGIN
     base.member_display_name AS display_name,
     base.member_avatar_url AS avatar_url,
     base.member_role AS role,
-    coalesce(done.completed_count, 0)::bigint AS sessions_this_week,
-    coalesce(plan.scheduled_count, 0)::bigint AS scheduled_this_week,
     CASE
+      WHEN base.member_user_id = auth.uid() OR base.member_share_workout_summary
+        THEN coalesce(done.completed_count, 0)::bigint
+      ELSE 0::bigint
+    END AS sessions_this_week,
+    CASE
+      WHEN base.member_user_id = auth.uid() OR base.member_share_workout_summary
+        THEN coalesce(plan.scheduled_count, 0)::bigint
+      ELSE 0::bigint
+    END AS scheduled_this_week,
+    CASE
+      WHEN NOT (base.member_user_id = auth.uid() OR base.member_share_workout_summary) THEN 0
       WHEN coalesce(plan.scheduled_count, 0) = 0 THEN 0
       ELSE least(
         100,
@@ -117,8 +126,16 @@ BEGIN
         )::integer
       )
     END AS adherence_percent,
-    coalesce(pr.record_count, 0)::bigint AS personal_records_count,
-    latest.latest_completed_at AS last_workout_at,
+    CASE
+      WHEN base.member_user_id = auth.uid() OR base.member_share_personal_records
+        THEN coalesce(pr.record_count, 0)::bigint
+      ELSE 0::bigint
+    END AS personal_records_count,
+    CASE
+      WHEN base.member_user_id = auth.uid() OR base.member_share_workout_summary
+        THEN latest.latest_completed_at
+      ELSE NULL::timestamptz
+    END AS last_workout_at,
     base.member_share_workout_summary AS share_workout_summary,
     base.member_share_personal_records AS share_personal_records,
     base.member_share_weights AS share_weights

@@ -155,6 +155,13 @@ export async function fetchWorkoutHistory(userId: UUID, limit = 50) {
   return [...merged.values()].sort((a, b) => (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt));
 }
 
+export async function fetchDailyConsistencyStreak() {
+  const { data, error } = await supabase.rpc("get_daily_consistency_streak");
+  if (error) throw new Error(error.message);
+  const current = data?.[0]?.current_streak_days;
+  return typeof current === "number" ? current : 0;
+}
+
 function buildExercise(
   sessionId: UUID,
   template: SplitExerciseWithDetails,
@@ -405,4 +412,32 @@ export function createSessionOnlyExercise(
       updatedAt: now,
     })),
   };
+}
+
+export async function addSessionExercise(sessionId: UUID, exercise: Exercise, setCount = 3) {
+  const session = await fetchWorkoutSession(sessionId);
+  if (!session) throw new Error("التمرينة مش موجودة.");
+  if (session.exercises.some((item) => item.exerciseId === exercise.id)) throw new Error("التمرين موجود بالفعل في الجلسة.");
+  const workoutExercise = createSessionOnlyExercise(sessionId, exercise, session.exercises.length, Math.max(1, setCount));
+  const updated = { ...session, exercises: [...session.exercises, workoutExercise], updatedAt: new Date().toISOString() };
+  await cacheWorkout(updated);
+  await enqueueSync("workoutExercise", "upsert", { ...workoutExercise, sets: [] });
+  for (const set of workoutExercise.sets) await enqueueSync("workoutSet", "upsert", set);
+  void flushSyncQueue();
+  return updated;
+}
+
+export async function updateWorkoutExerciseNotes(sessionId: UUID, workoutExerciseId: UUID, notes: string) {
+  const session = await fetchWorkoutSession(sessionId);
+  if (!session) throw new Error("التمرينة مش موجودة.");
+  const now = new Date().toISOString();
+  const current = session.exercises.find((exercise) => exercise.id === workoutExerciseId);
+  if (!current) throw new Error("التمرين مش موجود.");
+  const changed: WorkoutExerciseWithDetails = { ...current, notes: notes.trim() };
+  const exercises = session.exercises.map((exercise) => exercise.id === workoutExerciseId ? changed : exercise);
+  const updated = { ...session, exercises, updatedAt: now };
+  await cacheWorkout(updated);
+  await enqueueSync("workoutExercise", "upsert", { ...changed, sets: [] });
+  void flushSyncQueue();
+  return updated;
 }

@@ -1,7 +1,7 @@
 {
   "name": "gym-crew-mobile",
   "main": "expo-router/entry",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "dependencies": {
     "@expo/ui": "~57.0.7",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -65,7 +65,10 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run lint",
-    "export": "expo export --platform web"
+    "export": "expo export --platform web",
+    "dev": "expo start --dev-client --lan --clear",
+    "qa": "npm run check && expo install --check",
+    "bundle:android": "expo export --platform android --output-dir dist/android"
   },
   "private": true
 }

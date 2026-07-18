@@ -1,5 +1,5 @@
-import { Alert, View } from "react-native";
-import { FileUp, LayoutList, Sparkles } from "lucide-react-native";
+import { View } from "react-native";
+import { LayoutList, Sparkles } from "lucide-react-native";
 import { Card } from "@/components/ui/card";
 import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ export function SetupChooser({ onManual, onStarter, loading }: { onManual: () =>
   const options = [
     { icon: LayoutList, title: t("split.createManually"), desc: language === "ar" ? "ابدأ بأسبوع فاضي وركّبه بطريقتك." : "Start with an empty week and build it your way.", action: onManual },
     { icon: Sparkles, title: t("split.starterPlan"), desc: language === "ar" ? "اختار نقطة بداية وعدّلها براحتك." : "Pick a starting point and customize it.", action: onStarter },
-    { icon: FileUp, title: t("split.importPlan"), desc: language === "ar" ? "رفع صورة أو ملف هيتضاف في المرحلة الجاية للموبايل." : "Photo and file import arrives in the next mobile phase.", action: () => Alert.alert(t("split.importPlan"), t("common.comingSoon")) },
   ];
   return (
     <View style={{ gap: spacing.md }}>

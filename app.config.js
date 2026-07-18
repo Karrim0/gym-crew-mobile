@@ -1,9 +1,9 @@
 /** @type {import('expo/config').ExpoConfig} */
 const config = {
   name: "Gym Crew",
-slug: "kareem-hanafy",
-owner: "kaghim0s-team",
-  version: "0.1.0",
+  slug: "kareem-hanafy",
+  owner: "kaghim0s-team",
+  version: "0.2.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "gymcrew",
@@ -11,14 +11,16 @@ owner: "kaghim0s-team",
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.karrim.gymcrew",
+    buildNumber: "2",
     infoPlist: {
       CFBundleAllowMixedLocalizations: true,
     },
   },
   android: {
     package: "com.karrim.gymcrew",
+    versionCode: 2,
     adaptiveIcon: {
-      backgroundColor: "#7C5CFC",
+      backgroundColor: "#6F5AF7",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
@@ -35,8 +37,8 @@ owner: "kaghim0s-team",
     [
       "expo-splash-screen",
       {
-        backgroundColor: "#F4F5F9",
-        dark: { backgroundColor: "#101117" },
+        backgroundColor: "#F6F7FB",
+        dark: { backgroundColor: "#0E0F14" },
         image: "./assets/images/splash-icon.png",
         imageWidth: 180,
         resizeMode: "contain",

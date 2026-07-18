@@ -5,6 +5,9 @@ import { fetchProfile } from "@/features/profile/profile-service";
 import { fetchCurrentMembership } from "@/features/groups/group-service";
 import type { CurrentGroupMembership, UserProfile } from "@/types";
 import { clearUserLocalData } from "@/lib/offline/database";
+import { useRestTimerStore } from "@/stores/rest-timer-store";
+import { useNotificationCenterStore } from "@/stores/notification-center-store";
+import { useConnectivityStore } from "@/stores/connectivity-store";
 
 interface SessionState {
   initialized: boolean;
@@ -16,6 +19,7 @@ interface SessionState {
   error: string | null;
   initialize: () => Promise<() => void>;
   refreshContext: () => Promise<void>;
+  setProfile: (profile: UserProfile) => void;
   clear: () => void;
   signOutLocal: () => Promise<void>;
 }
@@ -80,6 +84,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return () => subscription.subscription.unsubscribe();
   },
 
+  setProfile: (profile) => set({ profile }),
+
   refreshContext: async () => {
     const user = get().user;
     if (!user) return;
@@ -98,7 +104,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   signOutLocal: async () => {
     const userId = get().user?.id;
+    await useRestTimerStore.getState().stop();
+    useNotificationCenterStore.getState().clear();
     if (userId) await clearUserLocalData(userId);
+    await useConnectivityStore.getState().refresh();
     await supabase.auth.signOut();
     set({ session: null, user: null, profile: null, membership: null, loadingContext: false });
   },

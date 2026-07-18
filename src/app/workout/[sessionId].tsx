@@ -4,7 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ArrowLeft, Check, ChevronLeft, Dumbbell, MoreHorizontal, Play, Plus, X } from "lucide-react-native";
+import { ArrowLeft, Check, ChevronLeft, Dumbbell, MoreHorizontal, Play, Plus, StickyNote, X } from "lucide-react-native";
 import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import { MuscleCard } from "@/components/workout/muscle-card";
 import { NumberPicker } from "@/components/workout/number-picker";
 import { RestTimerSheet } from "@/components/workout/rest-timer-sheet";
 import { WorkoutExerciseCard } from "@/components/workout/workout-exercise-card";
-import { addWorkoutSet, cancelWorkout, fetchPreviousPerformances, fetchWorkoutSession, finishWorkout, logWorkoutSet, reorderWorkoutExercises } from "@/features/workouts/workout-service";
+import { addWorkoutSet, cancelWorkout, fetchPreviousPerformances, fetchWorkoutSession, finishWorkout, logWorkoutSet, reorderWorkoutExercises, updateWorkoutExerciseNotes } from "@/features/workouts/workout-service";
 import { friendlyError } from "@/lib/supabase/errors";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
@@ -61,6 +61,9 @@ export default function GuidedWorkoutScreen() {
   const [customRepsOpen, setCustomRepsOpen] = useState(false);
   const [customValue, setCustomValue] = useState("");
   const [timerOpen, setTimerOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesValue, setNotesValue] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
   const [lastLogged, setLastLogged] = useState<{ weight: number | null; reps: number; comparison: "new" | "same" | "better" | "changed" } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -92,7 +95,7 @@ export default function GuidedWorkoutScreen() {
   }, [selected]);
 
   function chooseExercise(exercise: WorkoutExerciseWithDetails) {
-    setSelectedId(exercise.id); setStage("ready"); setLastLogged(null);
+    setSelectedId(exercise.id); setStage("ready"); setLastLogged(null); setNotesValue(exercise.notes);
     const next = exercise.sets.find((s) => !s.isCompleted);
     const old = next ? previous[exercise.exerciseId]?.sets[next.setNumber - 1] : undefined;
     setWeight(old?.weightKg ?? exercise.sets.filter((s) => s.isCompleted).at(-1)?.weightKg ?? null);
@@ -125,16 +128,36 @@ export default function GuidedWorkoutScreen() {
       setStage("result");
       if (settings.hapticsEnabled) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const nextNumber = pendingSet.setNumber + 1;
-      await timer.start(settings.defaultRestSeconds, `${selected?.exercise.name ?? ""} · ${language === "ar" ? "سِت" : "Set"} ${nextNumber}`);
+      await timer.start(settings.defaultRestSeconds, `${selected?.exercise.name ?? ""} · ${language === "ar" ? "سِت" : "Set"} ${nextNumber}`, `/workout/${session.id}`);
       setTimerOpen(true);
     } catch (caught) { Alert.alert(t("common.error"), friendlyError(caught)); }
     finally { setSaving(false); }
   }
 
   async function anotherSet() {
+    if (!session || !selected || saving) return;
+    setSaving(true);
+    try {
+      const refreshed = await addWorkoutSet(session.id, selected.id);
+      setSession(refreshed);
+      setStage("ready");
+      setLastLogged(null);
+    } catch (caught) {
+      Alert.alert(t("common.error"), friendlyError(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveExerciseNotes() {
     if (!session || !selected) return;
-    const refreshed = await addWorkoutSet(session.id, selected.id);
-    setSession(refreshed); setStage("ready"); setLastLogged(null);
+    setNotesSaving(true);
+    try {
+      const updated = await updateWorkoutExerciseNotes(session.id, selected.id, notesValue);
+      setSession(updated);
+      setNotesOpen(false);
+    } catch (caught) { Alert.alert(t("common.error"), friendlyError(caught)); }
+    finally { setNotesSaving(false); }
   }
 
   async function completeWorkout() {
@@ -144,8 +167,17 @@ export default function GuidedWorkoutScreen() {
     Alert.alert(t("workout.finishWorkout"), language === "ar" ? "هنحفظ كل اللي لعبته ونقفل التمرينة." : "We'll save your completed sets and close the workout.", [
       { text: t("common.cancel"), style: "cancel" },
       { text: t("workout.finishWorkout"), onPress: () => void (async () => {
-        const seconds = Math.max(1, Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000));
-        await timer.stop(); await finishWorkout(session.id, seconds); router.replace("/(tabs)/progress");
+        setSaving(true);
+        try {
+          const seconds = Math.max(1, Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000));
+          await timer.stop();
+          await finishWorkout(session.id, seconds);
+          router.replace("/(tabs)/progress");
+        } catch (caught) {
+          Alert.alert(t("common.error"), friendlyError(caught));
+        } finally {
+          setSaving(false);
+        }
       })() },
     ]);
   }
@@ -154,8 +186,39 @@ export default function GuidedWorkoutScreen() {
     if (!session) return;
     Alert.alert(language === "ar" ? "تلغي التمرينة؟" : "Discard workout?", language === "ar" ? "السِتات المسجلة هتتعلّم كملغية." : "The session will be marked as cancelled.", [
       { text: t("common.cancel"), style: "cancel" },
-      { text: t("common.delete"), style: "destructive", onPress: () => void cancelWorkout(session.id).then(() => router.replace("/(tabs)/home")) },
+      { text: t("common.delete"), style: "destructive", onPress: () => void (async () => {
+        setSaving(true);
+        try {
+          await timer.stop();
+          await cancelWorkout(session.id);
+          router.replace("/(tabs)/home");
+        } catch (caught) {
+          Alert.alert(t("common.error"), friendlyError(caught));
+        } finally {
+          setSaving(false);
+        }
+      })() },
     ]);
+  }
+
+
+  function applyCustomValue() {
+    const parsed = Number(customValue.trim().replace(",", "."));
+    if (customWeightOpen) {
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 5000) {
+        Alert.alert(t("common.error"), language === "ar" ? "اكتب وزن من 0 لـ 5000." : "Enter a weight from 0 to 5000.");
+        return;
+      }
+      setWeight(Math.round(parsed * 100) / 100);
+    } else {
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1000) {
+        Alert.alert(t("common.error"), language === "ar" ? "اكتب عدد عدات صحيح من 1 لـ 1000." : "Enter whole reps from 1 to 1000.");
+        return;
+      }
+      setReps(parsed);
+    }
+    setCustomWeightOpen(false);
+    setCustomRepsOpen(false);
   }
 
   if (loading) return <Screen scroll={false}><LoadingState /></Screen>;
@@ -182,6 +245,7 @@ export default function GuidedWorkoutScreen() {
           <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.surfaceStrong, overflow: "hidden" }}><View style={{ height: "100%", width: `${Math.round((completedSets / Math.max(1, totalSets)) * 100)}%`, backgroundColor: colors.primary }} /></View>
         </Card>
         <View style={{ gap: spacing.sm }}>{session.exercises.map((exercise, index) => <WorkoutExerciseCard key={exercise.id} exercise={exercise} previous={previous[exercise.exerciseId]} index={index} total={session.exercises.length} onPress={() => chooseExercise(exercise)} onMove={(direction) => void moveExercise(index, direction)} />)}</View>
+        <Button variant="secondary" icon={<Plus color={colors.primary} size={18} />} onPress={() => router.push(`/exercise-picker?sessionId=${session.id}`)}>{language === "ar" ? "ضيف تمرين للجلسة" : "Add exercise to workout"}</Button>
         <Button variant="secondary" onPress={() => void completeWorkout()}>{t("workout.finishWorkout")}</Button>
       </Screen>
     );
@@ -206,6 +270,12 @@ export default function GuidedWorkoutScreen() {
       ) : (
         <>
           <MuscleCard primary={selected.exercise.primaryMuscle} secondary={selected.exercise.secondaryMuscles} />
+          <Pressable onPress={() => { setNotesValue(selected.notes); setNotesOpen(true); }}>
+            <Card muted elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
+              <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}><StickyNote size={19} color={colors.primary} /></View>
+              <View style={{ flex: 1, minWidth: 0 }}><AppText variant="smallBold">{language === "ar" ? "ملاحظات التمرين" : "Exercise notes"}</AppText><AppText variant="small" color="muted" numberOfLines={2}>{selected.notes || (language === "ar" ? "دوس واكتب تكنيك، قبضة، أو إعداد الجهاز." : "Tap to save technique, grip, or machine setup.")}</AppText></View>
+            </Card>
+          </Pressable>
           <Card muted style={{ gap: spacing.sm }}>
             <AppText variant="smallBold" color="muted">{t("workout.lastTime")}</AppText>
             {previous[selected.exerciseId]?.sets.length ? (
@@ -249,7 +319,7 @@ export default function GuidedWorkoutScreen() {
                 {lastLogged.comparison === "better" ? t("workout.improved") : lastLogged.comparison === "same" ? t("workout.matched") : lastLogged.comparison === "new" ? t("workout.newExercise") : language === "ar" ? "أداء مختلف واتسجل" : "Different performance logged"}
               </AppText>
               <View style={{ flexDirection: rowDirection, gap: spacing.sm, alignSelf: "stretch" }}>
-                <Button style={{ flex: 1 }} onPress={() => { setStage("ready"); setLastLogged(null); }}>{pendingSet ? t("workout.nextSet") : t("workout.addSet")}</Button>
+                <Button style={{ flex: 1 }} loading={saving} onPress={() => { if (pendingSet) { setStage("ready"); setLastLogged(null); } else { void anotherSet(); } }}>{pendingSet ? t("workout.nextSet") : t("workout.addSet")}</Button>
                 <Button style={{ flex: 1 }} variant="secondary" onPress={() => { setStage("list"); setSelectedId(null); }}>{t("workout.switchExercise")}</Button>
               </View>
             </Card>
@@ -258,6 +328,18 @@ export default function GuidedWorkoutScreen() {
       )}
 
       <RestTimerSheet visible={timerOpen && timer.active} onClose={() => setTimerOpen(false)} onContinue={() => { setTimerOpen(false); setStage("ready"); }} />
+      <Modal visible={notesOpen} transparent animationType="fade" onRequestClose={() => setNotesOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <Card style={{ width: "100%", maxWidth: 420, gap: spacing.md }}>
+            <AppText variant="title3">{language === "ar" ? "ملاحظات التمرين" : "Exercise notes"}</AppText>
+            <TextField value={notesValue} onChangeText={setNotesValue} multiline maxLength={500} style={{ minHeight: 120, textAlignVertical: "top" }} placeholder={language === "ar" ? "مثال: المقعد على رقم 4، قبضة متوسطة..." : "Example: seat at 4, medium grip..."} />
+            <View style={{ flexDirection: rowDirection, gap: 10 }}>
+              <Button variant="secondary" style={{ flex: 1 }} onPress={() => setNotesOpen(false)}>{t("common.cancel")}</Button>
+              <Button style={{ flex: 1 }} loading={notesSaving} onPress={() => void saveExerciseNotes()}>{t("common.save")}</Button>
+            </View>
+          </Card>
+        </View>
+      </Modal>
       <Modal visible={customWeightOpen || customRepsOpen} transparent animationType="fade" onRequestClose={() => { setCustomWeightOpen(false); setCustomRepsOpen(false); }}>
         <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: 20 }}>
           <Card style={{ width: "100%", maxWidth: 420, gap: spacing.md }}>
@@ -265,7 +347,7 @@ export default function GuidedWorkoutScreen() {
             <TextField value={customValue} onChangeText={setCustomValue} keyboardType="decimal-pad" autoFocus />
             <View style={{ flexDirection: rowDirection, gap: 10 }}>
               <Button variant="secondary" style={{ flex: 1 }} onPress={() => { setCustomWeightOpen(false); setCustomRepsOpen(false); }}>{t("common.cancel")}</Button>
-              <Button style={{ flex: 1 }} onPress={() => { const n = Number(customValue.replace(",", ".")); if (Number.isFinite(n) && n >= 0) { if (customWeightOpen) setWeight(n); else setReps(Math.round(n)); setCustomWeightOpen(false); setCustomRepsOpen(false); } }}>{t("common.done")}</Button>
+              <Button style={{ flex: 1 }} onPress={applyCustomValue}>{t("common.done")}</Button>
             </View>
           </Card>
         </View>

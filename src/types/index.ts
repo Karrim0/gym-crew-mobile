@@ -72,6 +72,9 @@ export interface GroupMemberWeeklyStats {
   adherencePercent: number;
   personalRecordsCount: number;
   lastWorkoutAt: string | null;
+  shareWorkoutSummary: boolean;
+  sharePersonalRecords: boolean;
+  shareWeights: boolean;
 }
 
 export * from "./domain";

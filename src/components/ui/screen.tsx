@@ -9,6 +9,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ConnectivityBanner } from "@/components/layout/connectivity-banner";
 import { spacing } from "@/lib/theme/tokens";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 
@@ -19,6 +20,7 @@ interface ScreenProps extends ScrollViewProps {
   footer?: ReactNode;
   contentStyle?: ViewStyle;
   safeBottom?: boolean;
+  showConnectivity?: boolean;
 }
 
 export function Screen({
@@ -29,6 +31,8 @@ export function Screen({
   footer,
   contentStyle,
   safeBottom = true,
+  showConnectivity = true,
+  contentContainerStyle,
   ...props
 }: PropsWithChildren<ScreenProps>) {
   const { colors } = useAppTheme();
@@ -49,6 +53,7 @@ export function Screen({
         contentStyle,
       ]}
     >
+      {showConnectivity ? <ConnectivityBanner /> : null}
       {children}
     </View>
   );
@@ -61,15 +66,13 @@ export function Screen({
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}
-            refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}
+            refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} /> : undefined}
             {...props}
-            contentContainerStyle={{ flexGrow: 1 }}
+            contentContainerStyle={[{ flexGrow: 1 }, contentContainerStyle]}
           >
             {body}
           </ScrollView>
-        ) : (
-          body
-        )}
+        ) : body}
         {footer}
       </KeyboardAvoidingView>
     </SafeAreaView>

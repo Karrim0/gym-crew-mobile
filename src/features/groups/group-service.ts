@@ -73,5 +73,8 @@ export async function fetchGroupWeeklyStats(groupId: UUID): Promise<GroupMemberW
     adherencePercent: row.adherence_percent,
     personalRecordsCount: row.personal_records_count,
     lastWorkoutAt: row.last_workout_at,
+    shareWorkoutSummary: row.share_workout_summary,
+    sharePersonalRecords: row.share_personal_records,
+    shareWeights: row.share_weights,
   }));
 }

@@ -16,12 +16,14 @@ interface SettingsState {
   defaultRestSeconds: number;
   hapticsEnabled: boolean;
   soundEnabled: boolean;
+  notificationsEnabled: boolean;
   setLanguage: (language: Language) => void;
   setColorMode: (mode: ColorMode) => void;
   setWeightUnit: (unit: WeightUnit) => void;
   setDefaultRestSeconds: (seconds: number) => void;
   setHapticsEnabled: (enabled: boolean) => void;
   setSoundEnabled: (enabled: boolean) => void;
+  setNotificationsEnabled: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -33,12 +35,14 @@ export const useSettingsStore = create<SettingsState>()(
       defaultRestSeconds: 120,
       hapticsEnabled: true,
       soundEnabled: true,
+      notificationsEnabled: true,
       setLanguage: (language) => set({ language }),
       setColorMode: (colorMode) => set({ colorMode }),
       setWeightUnit: (weightUnit) => set({ weightUnit }),
       setDefaultRestSeconds: (defaultRestSeconds) => set({ defaultRestSeconds }),
       setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
       setSoundEnabled: (soundEnabled) => set({ soundEnabled }),
+      setNotificationsEnabled: (notificationsEnabled) => set({ notificationsEnabled }),
     }),
     {
       name: "gym-crew:settings",
@@ -50,6 +54,7 @@ export const useSettingsStore = create<SettingsState>()(
         defaultRestSeconds: state.defaultRestSeconds,
         hapticsEnabled: state.hapticsEnabled,
         soundEnabled: state.soundEnabled,
+        notificationsEnabled: state.notificationsEnabled,
       }),
     },
   ),

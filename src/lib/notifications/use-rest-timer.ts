@@ -11,6 +11,7 @@ export function useRestTimer() {
   const paused = useRestTimerStore((state) => state.paused);
   const endsAt = useRestTimerStore((state) => state.endsAt);
   const nextLabel = useRestTimerStore((state) => state.nextLabel);
+  const notificationId = useRestTimerStore((state) => state.notificationId);
   const getRemaining = useRestTimerStore((state) => state.getRemaining);
   const pause = useRestTimerStore((state) => state.pause);
   const resume = useRestTimerStore((state) => state.resume);
@@ -29,11 +30,14 @@ export function useRestTimer() {
       setRemaining(next);
       if (active && !paused && next <= 0 && !finished) {
         finished = true;
-        if (soundEnabled) {
+        // When a native local notification was scheduled, Android/iOS owns the
+        // sound/vibration. Falling back here keeps the timer useful when the user
+        // denied notification permission or disabled background notifications.
+        if (!notificationId && soundEnabled) {
           player.seekTo(0);
           player.play();
         }
-        if (hapticsEnabled) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (!notificationId && hapticsEnabled) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         void stop();
       }
     };
@@ -43,7 +47,7 @@ export function useRestTimer() {
       clearTimeout(initial);
       if (interval) clearInterval(interval);
     };
-  }, [active, paused, endsAt, getRemaining, hapticsEnabled, player, soundEnabled, stop]);
+  }, [active, paused, endsAt, getRemaining, hapticsEnabled, notificationId, player, soundEnabled, stop]);
 
   return { active, paused, endsAt, nextLabel, remaining, pause, resume, addSeconds, stop };
 }

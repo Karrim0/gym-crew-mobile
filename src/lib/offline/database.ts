@@ -4,6 +4,11 @@ import type { WorkoutSessionWithDetails } from "@/types";
 let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;
 let initialized = false;
 
+async function ensureColumn(db: SQLite.SQLiteDatabase, table: string, column: string, definition: string) {
+  const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+  if (!columns.some((item) => item.name === column)) await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
 export async function getDatabase() {
   if (!databasePromise) databasePromise = SQLite.openDatabaseAsync("gym-crew.db");
   const db = await databasePromise;
@@ -35,6 +40,12 @@ export async function getDatabase() {
         updated_at TEXT NOT NULL
       );
     `);
+    await ensureColumn(db, "sync_queue", "entity_id", "TEXT");
+    await ensureColumn(db, "sync_queue", "last_attempt_at", "TEXT");
+    await db.execAsync(`
+      CREATE INDEX IF NOT EXISTS sync_queue_created_idx ON sync_queue(created_at ASC);
+      CREATE INDEX IF NOT EXISTS sync_queue_entity_idx ON sync_queue(entity, entity_id);
+    `);
     initialized = true;
   }
   return db;
@@ -60,19 +71,14 @@ export async function cacheWorkout(session: WorkoutSessionWithDetails) {
 
 export async function getCachedWorkout(sessionId: string): Promise<WorkoutSessionWithDetails | null> {
   const db = await getDatabase();
-  const row = await db.getFirstAsync<{ payload: string }>(
-    "SELECT payload FROM workout_cache WHERE id = ? LIMIT 1",
-    sessionId,
-  );
+  const row = await db.getFirstAsync<{ payload: string }>("SELECT payload FROM workout_cache WHERE id = ? LIMIT 1", sessionId);
   return row ? (JSON.parse(row.payload) as WorkoutSessionWithDetails) : null;
 }
 
 export async function getCachedActiveWorkout(userId: string): Promise<WorkoutSessionWithDetails | null> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<{ payload: string }>(
-    `SELECT payload FROM workout_cache
-     WHERE user_id = ? AND status = 'in_progress'
-     ORDER BY updated_at DESC LIMIT 1`,
+    `SELECT payload FROM workout_cache WHERE user_id = ? AND status = 'in_progress' ORDER BY updated_at DESC LIMIT 1`,
     userId,
   );
   return row ? (JSON.parse(row.payload) as WorkoutSessionWithDetails) : null;
@@ -81,9 +87,7 @@ export async function getCachedActiveWorkout(userId: string): Promise<WorkoutSes
 export async function getCachedWorkoutHistory(userId: string, limit = 50) {
   const db = await getDatabase();
   const rows = await db.getAllAsync<{ payload: string }>(
-    `SELECT payload FROM workout_cache
-     WHERE user_id = ? AND status = 'completed'
-     ORDER BY updated_at DESC LIMIT ?`,
+    `SELECT payload FROM workout_cache WHERE user_id = ? AND status = 'completed' ORDER BY updated_at DESC LIMIT ?`,
     userId,
     limit,
   );
@@ -108,10 +112,7 @@ export async function cacheValue<T>(key: string, value: T) {
 
 export async function readCachedValue<T>(key: string): Promise<T | null> {
   const db = await getDatabase();
-  const row = await db.getFirstAsync<{ value: string }>(
-    "SELECT value FROM key_value_cache WHERE key = ? LIMIT 1",
-    key,
-  );
+  const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM key_value_cache WHERE key = ? LIMIT 1", key);
   return row ? (JSON.parse(row.value) as T) : null;
 }
 

@@ -1,7 +1,7 @@
 export const appConfig = {
   name: "Gym Crew",
-  slug: "gym-crew-mobile",
-  version: "0.1.0",
+  slug: "kareem-hanafy",
+  version: "0.2.0",
   scheme: "gymcrew",
   supportEmail: "support@gymcrew.app",
 } as const;
