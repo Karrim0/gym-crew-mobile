@@ -3,7 +3,7 @@ const config = {
   name: "Gym Crew",
   slug: "kareem-hanafy",
   owner: "kaghim0s-team",
-  version: "0.3.0",
+  version: "0.4.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "gymcrew",
@@ -11,16 +11,16 @@ const config = {
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.karrim.gymcrew",
-    buildNumber: "3",
+    buildNumber: "4",
     infoPlist: {
       CFBundleAllowMixedLocalizations: true,
     },
   },
   android: {
     package: "com.karrim.gymcrew",
-    versionCode: 3,
+    versionCode: 4,
     adaptiveIcon: {
-      backgroundColor: "#6F5AF7",
+      backgroundColor: "#99E61A",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
@@ -37,8 +37,8 @@ const config = {
     [
       "expo-splash-screen",
       {
-        backgroundColor: "#F6F7FB",
-        dark: { backgroundColor: "#0E0F14" },
+        backgroundColor: "#F4F6F2",
+        dark: { backgroundColor: "#070B0D" },
         image: "./assets/images/splash-icon.png",
         imageWidth: 180,
         resizeMode: "contain",

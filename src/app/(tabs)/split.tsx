@@ -13,7 +13,6 @@ import { ScreenSkeleton } from "@/components/ui/skeleton";
 import { SetupChooser } from "@/components/split/setup-chooser";
 import { DayCard } from "@/components/split/day-card";
 import { ActionSheet } from "@/components/ui/action-sheet";
-import { AppToast } from "@/components/ui/app-toast";
 import {
   applySplitTemplate,
   fetchPersonalSplit,
@@ -45,7 +44,7 @@ export default function SplitScreen() {
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [weekOrderOpen, setWeekOrderOpen] = useState(false);
   const [orderDraft, setOrderDraft] = useState<string[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const orderedSplit = useMemo(() => [...split].sort((a, b) => WEEKDAYS.indexOf(a.weekday) - WEEKDAYS.indexOf(b.weekday)), [split]);
 
@@ -60,18 +59,19 @@ export default function SplitScreen() {
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
-  function showToast(message: string) {
-    setToast(message);
-    setTimeout(() => setToast(null), 2800);
+  function showNotice(message: string) {
+    setNotice(message);
+    setTimeout(() => setNotice(null), 3200);
   }
 
   async function apply(template: SplitTemplateKey) {
     setWorking(true);
     try {
-      await applySplitTemplate(template);
-      await Promise.all([load(), refreshContext()]);
+      const updated = await applySplitTemplate(user!.id, template);
+      setSplit(updated);
+      await refreshContext();
       setTemplatesOpen(false);
-      showToast(language === "ar" ? "القالب اتضاف وتقدر تعدّل كل تفصيلة." : "Template applied. Every detail is customizable.");
+      showNotice(language === "ar" ? "الجدول اتطبق." : "Plan applied.");
     } catch (caught) {
       setError(friendlyError(caught));
     } finally {
@@ -101,7 +101,7 @@ export default function SplitScreen() {
       await reorderPersonalSplitDays(orderDraft);
       await Promise.all([load(), refreshContext()]);
       setWeekOrderOpen(false);
-      showToast(language === "ar" ? "ترتيب الأسبوع اتغيّر بنجاح." : "Week order updated.");
+      showNotice(language === "ar" ? "ترتيب الأسبوع اتحفظ." : "Week order saved.");
     } catch (caught) {
       setError(friendlyError(caught));
     } finally {
@@ -221,8 +221,8 @@ export default function SplitScreen() {
         <Button loading={working} onPress={() => void saveWeekOrder()}>{language === "ar" ? "حفظ ترتيب الأسبوع" : "Save week order"}</Button>
       </ActionSheet>
 
+      {notice ? <Card muted elevated={false} style={{ borderColor: colors.primary }}><AppText variant="smallBold" color="primary">{notice}</AppText></Card> : null}
       {error ? <Card muted elevated={false}><AppText variant="small" color="warning">{error}</AppText></Card> : null}
-      <AppToast visible={Boolean(toast)} message={toast ?? ""} tone="success" />
     </Screen>
   );
 }

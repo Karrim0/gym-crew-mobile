@@ -27,26 +27,28 @@ export function WorkoutValueControl({ label, value, suffix, step, min, max, onCh
 
   return (
     <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
-      <AppText variant="caption" color="muted" align="center">{label}</AppText>
-      <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 7, backgroundColor: colors.surfaceMuted, borderRadius: 18, padding: 6, borderWidth: 1, borderColor: colors.border }}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => change(-step)}
-          style={({ pressed }) => ({ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}
-        >
-          <Minus color={colors.text} size={19} />
-        </Pressable>
-        <Pressable onPress={onEdit} style={({ pressed }) => ({ flex: 1, minWidth: 0, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1, paddingHorizontal: spacing.xxs })}>
-          <AppText variant="title2" align="center" numberOfLines={1}>{value ?? "—"}</AppText>
+      <AppText variant="smallBold" color="muted" align="center">{label}</AppText>
+      <View style={{ backgroundColor: colors.surfaceMuted, borderRadius: 22, padding: 8, borderWidth: 1, borderColor: colors.border, gap: 8 }}>
+        <Pressable onPress={onEdit} style={({ pressed }) => ({ minHeight: 68, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}>
+          <AppText variant="display" align="center" numberOfLines={1}>{value ?? "—"}</AppText>
           {suffix ? <AppText variant="caption" color="muted" align="center">{suffix}</AppText> : null}
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => change(step)}
-          style={({ pressed }) => ({ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}
-        >
-          <Plus color={colors.text} size={19} />
-        </Pressable>
+        <View style={{ flexDirection: rowDirection, gap: spacing.xs }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => change(-step)}
+            style={({ pressed }) => ({ flex: 1, height: 44, borderRadius: 15, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.68 : 1 })}
+          >
+            <Minus color={colors.text} size={21} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => change(step)}
+            style={({ pressed }) => ({ flex: 1, height: 44, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.76 : 1 })}
+          >
+            <Plus color={colors.black} size={21} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );

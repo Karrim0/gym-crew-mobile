@@ -116,9 +116,19 @@ export async function readCachedValue<T>(key: string): Promise<T | null> {
   return row ? (JSON.parse(row.value) as T) : null;
 }
 
+export async function removeCachedValue(key: string) {
+  const db = await getDatabase();
+  await db.runAsync("DELETE FROM key_value_cache WHERE key = ?", key);
+}
+
+export async function removeCachedValuesLike(pattern: string) {
+  const db = await getDatabase();
+  await db.runAsync("DELETE FROM key_value_cache WHERE key LIKE ?", pattern);
+}
+
 export async function clearUserLocalData(userId: string) {
   const db = await getDatabase();
   await db.runAsync("DELETE FROM workout_cache WHERE user_id = ?", userId);
   await db.runAsync("DELETE FROM sync_queue");
-  await db.runAsync("DELETE FROM key_value_cache WHERE key LIKE ?", `%:${userId}`);
+  await db.runAsync("DELETE FROM key_value_cache WHERE key LIKE ?", `%${userId}%`);
 }

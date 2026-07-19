@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/database.types";
+import { cacheValue, readCachedValue } from "@/lib/offline/database";
 import type { CurrentGroupMembership, GroupMember, GroupMemberWeeklyStats, UUID, WorkoutGroup } from "@/types";
 
 type GroupRow = Tables<"groups">;
@@ -31,12 +32,21 @@ function mapMember(row: MemberRow): GroupMember {
 }
 
 export async function fetchCurrentMembership(userId: UUID): Promise<CurrentGroupMembership | null> {
-  const { data: member, error } = await supabase.from("group_members").select("*").eq("user_id", userId).maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!member) return null;
-  const { data: group, error: groupError } = await supabase.from("groups").select("*").eq("id", member.group_id).single();
-  if (groupError) throw new Error(groupError.message);
-  return { member: mapMember(member), group: mapGroup(group) };
+  const cacheKey = `membership:${userId}`;
+  try {
+    const { data: member, error } = await supabase.from("group_members").select("*").eq("user_id", userId).maybeSingle();
+    if (error) throw error;
+    if (!member) return null;
+    const { data: group, error: groupError } = await supabase.from("groups").select("*").eq("id", member.group_id).single();
+    if (groupError) throw groupError;
+    const membership = { member: mapMember(member), group: mapGroup(group) };
+    await cacheValue(cacheKey, membership);
+    return membership;
+  } catch (caught) {
+    const cached = await readCachedValue<CurrentGroupMembership>(cacheKey);
+    if (cached) return cached;
+    throw caught;
+  }
 }
 
 export async function createSoloWorkspace() {
@@ -61,20 +71,29 @@ export async function joinGroup(code: string) {
 }
 
 export async function fetchGroupWeeklyStats(groupId: UUID): Promise<GroupMemberWeeklyStats[]> {
-  const { data, error } = await supabase.rpc("get_group_member_weekly_stats", { target_group_id: groupId });
-  if (error) throw new Error(error.message);
-  return data.map((row) => ({
-    userId: row.user_id,
-    displayName: row.display_name,
-    avatarUrl: row.avatar_url,
-    role: row.role,
-    sessionsThisWeek: row.sessions_this_week,
-    scheduledThisWeek: row.scheduled_this_week,
-    adherencePercent: row.adherence_percent,
-    personalRecordsCount: row.personal_records_count,
-    lastWorkoutAt: row.last_workout_at,
-    shareWorkoutSummary: row.share_workout_summary,
-    sharePersonalRecords: row.share_personal_records,
-    shareWeights: row.share_weights,
-  }));
+  const cacheKey = `group-weekly-stats:${groupId}`;
+  try {
+    const { data, error } = await supabase.rpc("get_group_member_weekly_stats", { target_group_id: groupId });
+    if (error) throw error;
+    const stats = data.map((row) => ({
+      userId: row.user_id,
+      displayName: row.display_name,
+      avatarUrl: row.avatar_url,
+      role: row.role,
+      sessionsThisWeek: row.sessions_this_week,
+      scheduledThisWeek: row.scheduled_this_week,
+      adherencePercent: row.adherence_percent,
+      personalRecordsCount: row.personal_records_count,
+      lastWorkoutAt: row.last_workout_at,
+      shareWorkoutSummary: row.share_workout_summary,
+      sharePersonalRecords: row.share_personal_records,
+      shareWeights: row.share_weights,
+    }));
+    await cacheValue(cacheKey, stats);
+    return stats;
+  } catch (caught) {
+    const cached = await readCachedValue<GroupMemberWeeklyStats[]>(cacheKey);
+    if (cached) return cached;
+    throw caught;
+  }
 }

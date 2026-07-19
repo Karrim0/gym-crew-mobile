@@ -210,7 +210,6 @@ export default function GymModeScreen() {
       setReorderOpen(false);
       const target = updated.exercises.find((exercise) => exercise.id === selectedId) ?? updated.exercises[0];
       if (target) selectExercise(target, previous, updated);
-      showToast(language === "ar" ? "ترتيب التمرينة اتظبط." : "Workout order updated.");
     } catch (caught) {
       showToast(friendlyError(caught), "danger");
     } finally {
@@ -235,7 +234,6 @@ export default function GymModeScreen() {
         hasNextPlannedSet,
       });
       if (settings.hapticsEnabled) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast(language === "ar" ? "السِت اتحفظت على الجهاز." : "Set saved on this device.", "success", language === "ar" ? "تراجع" : "Undo");
     } catch (caught) {
       showToast(friendlyError(caught), "danger");
     } finally {
@@ -253,7 +251,6 @@ export default function GymModeScreen() {
       if (exercise) selectExercise(exercise, previous, updated);
       setLastLogged(null);
       setToast(null);
-      showToast(language === "ar" ? "رجّعنا السِت، عدّلها وسجّلها تاني." : "Set restored for editing.", "info");
     } catch (caught) {
       showToast(friendlyError(caught), "danger");
     } finally {
@@ -407,151 +404,147 @@ export default function GymModeScreen() {
         </Pressable>
       </View>
 
-      <Card style={{ flex: 1, gap: compact ? spacing.sm : spacing.md, padding: compact ? spacing.md : spacing.lg }}>
-        <View style={{ flexDirection: rowDirection, alignItems: "flex-start", gap: spacing.sm }}>
-          <View style={{ width: compact ? 44 : 50, height: compact ? 44 : 50, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
-            <Dumbbell color={colors.primary} size={compact ? 21 : 24} />
+      <View style={{ flex: 1, minHeight: 0, gap: compact ? spacing.sm : spacing.md }}>
+        <Card elevated={false} style={{ gap: compact ? 9 : spacing.sm, padding: compact ? spacing.md : spacing.lg, borderColor: colors.primarySoft }}>
+          <View pointerEvents="none" style={{ position: "absolute", width: 120, height: 120, borderRadius: 60, backgroundColor: colors.primarySofter, end: -34, top: -36 }} />
+          <View style={{ flexDirection: rowDirection, alignItems: "flex-start", gap: spacing.sm }}>
+            <View style={{ width: compact ? 42 : 48, height: compact ? 42 : 48, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+              <Dumbbell color={colors.primaryStrong} size={compact ? 20 : 23} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              <AppText variant={compact ? "title3" : "title2"} numberOfLines={2}>{selected.exercise.name}</AppText>
+              <AppText variant="small" color="muted" numberOfLines={1}>{selected.exercise.primaryMuscle} · {selectedIndex + 1}/{session.exercises.length}</AppText>
+            </View>
+            <Pressable onPress={() => setExerciseListOpen(true)} style={({ pressed }) => ({ minWidth: 44, height: 38, borderRadius: 14, backgroundColor: colors.surfaceMuted, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}>
+              <ListChecks color={colors.textMuted} size={19} />
+            </Pressable>
           </View>
-          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-            <AppText variant={compact ? "title3" : "title2"} numberOfLines={2}>{selected.exercise.name}</AppText>
-            <AppText variant="small" color="muted" numberOfLines={1}>
-              {selected.exercise.primaryMuscle} · {language === "ar" ? `تمرين ${selectedIndex + 1} من ${session.exercises.length}` : `Exercise ${selectedIndex + 1} of ${session.exercises.length}`}
-            </AppText>
-          </View>
-          <Pressable onPress={() => setExerciseListOpen(true)} style={({ pressed }) => ({ paddingHorizontal: 10, minHeight: 38, borderRadius: 14, backgroundColor: colors.surfaceMuted, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}>
-            <AppText variant="smallBold" color="primary">{selectedIndex + 1}/{session.exercises.length}</AppText>
-          </Pressable>
-        </View>
 
-        <View style={{ flexDirection: rowDirection, gap: spacing.sm }}>
-          <View style={{ flex: 1, backgroundColor: colors.primarySofter, borderRadius: 16, paddingHorizontal: 12, paddingVertical: compact ? 8 : 10, gap: 2 }}>
-            <AppText variant="caption" color="muted">{language === "ar" ? "المخطط" : "Plan"}</AppText>
+          <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: spacing.sm }}>
             <AppText variant="smallBold">{selected.sets.length} {t("common.sets")} · {selected.targetRepsMin}–{selected.targetRepsMax} {language === "ar" ? "عدة" : "reps"}</AppText>
+            <View style={{ backgroundColor: colors.primarySofter, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 }}>
+              <AppText variant="caption" color="primary">{pendingSet ? (language === "ar" ? `سِت ${pendingSet.setNumber}` : `Set ${pendingSet.setNumber}`) : (language === "ar" ? "اكتمل" : "Done")}</AppText>
+            </View>
           </View>
-          <View style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: 16, paddingHorizontal: 12, paddingVertical: compact ? 8 : 10, gap: 2 }}>
-            <AppText variant="caption" color="muted">{language === "ar" ? "السِت الحالية" : "Current set"}</AppText>
-            <AppText variant="smallBold">{pendingSet ? `${pendingSet.setNumber} / ${selected.sets.length}` : (language === "ar" ? "المخطط خلص" : "Plan done")}</AppText>
-          </View>
-        </View>
 
-        <View style={{ gap: 7 }}>
-          <AppText variant="caption" color="muted">{language === "ar" ? "آخر مرة" : "Last time"}</AppText>
           {past?.sets.length ? (
-            <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 7 }}>
-              {past.sets.slice(0, compact ? 2 : 3).map((set) => (
-                <View key={set.id} style={{ backgroundColor: colors.surfaceMuted, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 7 }}>
-                  <AppText variant="smallBold">{set.weightKg ?? 0} {t("common.kg")} × {set.reps}</AppText>
+            <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 8, backgroundColor: colors.surfaceMuted, borderRadius: 15, paddingHorizontal: 12, minHeight: 44 }}>
+              <AppText variant="caption" color="muted">{language === "ar" ? "آخر مرة" : "Last"}</AppText>
+              <View style={{ flex: 1, flexDirection: rowDirection, gap: 7, alignItems: "center" }}>
+                {past.sets.slice(0, compact ? 2 : 3).map((set) => <AppText key={set.id} variant="smallBold">{set.weightKg ?? 0} × {set.reps}</AppText>)}
+              </View>
+            </View>
+          ) : (
+            <AppText variant="caption" color="muted">{language === "ar" ? "أول تسجيل للتمرين ده" : "First time logging this exercise"}</AppText>
+          )}
+        </Card>
+
+        <Card style={{ flex: 1, minHeight: 0, justifyContent: "space-between", gap: compact ? spacing.sm : spacing.md, padding: compact ? spacing.md : spacing.lg }}>
+          {lastLogged ? (
+            <>
+              <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm, backgroundColor: colors.successSoft, borderRadius: 16, padding: 12 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={21} /></View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <AppText variant="smallBold">{language === "ar" ? `سِت ${completedCount(selected)} اتسجلت` : `Set ${completedCount(selected)} logged`}</AppText>
+                  <AppText variant="small" color="muted">{lastLogged.weight ?? 0} {t("common.kg")} × {lastLogged.reps}</AppText>
                 </View>
-              ))}
-              {past.exerciseNotes ? <View style={{ flex: 1, minWidth: 120, justifyContent: "center" }}><AppText variant="caption" color="muted" numberOfLines={1}>📝 {past.exerciseNotes}</AppText></View> : null}
-            </View>
-          ) : <AppText variant="small" color="muted">{language === "ar" ? "أول مرة تسجل التمرين ده." : "First time logging this exercise."}</AppText>}
-        </View>
+                <Pressable onPress={() => void undoLastSet()} style={({ pressed }) => ({ padding: 8, opacity: pressed ? 0.65 : 1 })}><AppText variant="smallBold" color="primary">{language === "ar" ? "تراجع" : "Undo"}</AppText></Pressable>
+              </View>
 
-        <View style={{ height: 1, backgroundColor: colors.border }} />
+              <View style={{ flex: 1, justifyContent: "center", gap: spacing.sm }}>
+                <AppText variant="title3" align="center">{lastLogged.hasNextPlannedSet ? (language === "ar" ? "هتدخل سِت كمان؟" : "Another set?") : (language === "ar" ? "خلصت المطلوب" : "Target complete")}</AppText>
+                <AppText variant="small" color="muted" align="center">{language === "ar" ? "اختار وانت جاهز، مفيش تايمر مفروض عليك." : "Choose when you are ready. No forced timer."}</AppText>
+              </View>
 
-        {lastLogged ? (
-          <View style={{ flex: 1, justifyContent: "center", gap: compact ? spacing.sm : spacing.md }}>
-            <View style={{ alignItems: "center", gap: 7 }}>
-              <View style={{ width: 54, height: 54, borderRadius: 18, backgroundColor: colors.successSoft, alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={28} /></View>
-              <AppText variant="title3" align="center">{language === "ar" ? "السِت اتسجلت" : "Set logged"}</AppText>
-              <AppText variant="title2" align="center">{lastLogged.weight ?? 0} {t("common.kg")} × {lastLogged.reps}</AppText>
-              <AppText variant="small" color={lastLogged.comparison === "better" ? "success" : "muted"} align="center">
-                {lastLogged.comparison === "better"
-                  ? (language === "ar" ? "أداء أحسن من آخر مرة 🔥" : "Better than last time 🔥")
-                  : lastLogged.comparison === "same"
-                    ? (language === "ar" ? "نفس أداء آخر مرة" : "Matched last time")
-                    : (language === "ar" ? "اتحفظ، كمّل براحتك" : "Saved. Continue when ready.")}
-              </AppText>
-            </View>
-            {lastLogged.hasNextPlannedSet ? (
-              <>
-                <Button onPress={prepareSameExercise}>{language === "ar" ? "ادخل السِت اللي بعدها" : "Next set"}</Button>
-                <Button variant="secondary" onPress={goNextExercise}>{language === "ar" ? "كفاية، التمرين التالي" : "Enough, next exercise"}</Button>
-              </>
-            ) : (
-              <>
-                <Button onPress={goNextExercise}>{selectedIndex === session.exercises.length - 1 ? (language === "ar" ? "راجع وأنهِ التمرينة" : "Review and finish") : (language === "ar" ? "التمرين التالي" : "Next exercise")}</Button>
-                <Button variant="secondary" loading={saving} onPress={() => void addExtraSet()} icon={<Plus color={colors.primary} size={18} />}>{language === "ar" ? "أضف سِت زيادة" : "Add extra set"}</Button>
-              </>
-            )}
-          </View>
-        ) : pendingSet ? (
-          <View style={{ flex: 1, justifyContent: "space-between", gap: compact ? spacing.sm : spacing.md }}>
-            <View style={{ flexDirection: rowDirection, gap: spacing.sm }}>
-              <WorkoutValueControl
-                label={language === "ar" ? "الوزن" : "Weight"}
-                value={weight}
-                suffix={t("common.kg")}
-                step={weightStep}
-                min={0}
-                max={5000}
-                onChange={setWeight}
-                onEdit={() => { setCustomValue(weight?.toString() ?? ""); setCustomOpen("weight"); }}
-              />
-              <WorkoutValueControl
-                label={language === "ar" ? "العدات" : "Reps"}
-                value={reps}
-                step={1}
-                min={1}
-                max={1000}
-                onChange={setReps}
-                onEdit={() => { setCustomValue(reps?.toString() ?? ""); setCustomOpen("reps"); }}
-              />
-            </View>
+              {lastLogged.hasNextPlannedSet ? (
+                <View style={{ gap: spacing.sm }}>
+                  <Button onPress={prepareSameExercise}>{language === "ar" ? "سِت كمان" : "Next set"}</Button>
+                  <Button variant="secondary" onPress={goNextExercise}>{language === "ar" ? "التمرين التالي" : "Next exercise"}</Button>
+                </View>
+              ) : (
+                <View style={{ gap: spacing.sm }}>
+                  <Button onPress={goNextExercise}>{selectedIndex === session.exercises.length - 1 ? (language === "ar" ? "إنهاء التمرينة" : "Finish workout") : (language === "ar" ? "التمرين التالي" : "Next exercise")}</Button>
+                  <Button variant="secondary" loading={saving} onPress={() => void addExtraSet()} icon={<Plus color={colors.primaryStrong} size={18} />}>{language === "ar" ? "سِت زيادة" : "Extra set"}</Button>
+                </View>
+              )}
+            </>
+          ) : pendingSet ? (
+            <>
+              <View style={{ flex: 1, justifyContent: "center", gap: compact ? spacing.sm : spacing.md }}>
+                <View style={{ flexDirection: rowDirection, gap: spacing.sm }}>
+                  <WorkoutValueControl
+                    label={language === "ar" ? "الوزن" : "Weight"}
+                    value={weight}
+                    suffix={t("common.kg")}
+                    step={weightStep}
+                    min={0}
+                    max={5000}
+                    onChange={setWeight}
+                    onEdit={() => { setCustomValue(weight?.toString() ?? ""); setCustomOpen("weight"); }}
+                  />
+                  <WorkoutValueControl
+                    label={language === "ar" ? "العدات" : "Reps"}
+                    value={reps}
+                    step={1}
+                    min={1}
+                    max={1000}
+                    onChange={setReps}
+                    onEdit={() => { setCustomValue(reps?.toString() ?? ""); setCustomOpen("reps"); }}
+                  />
+                </View>
 
-            <View style={{ flexDirection: rowDirection, gap: 7, alignItems: "center" }}>
-              {[1, 2.5, 5].map((step) => (
-                <Pressable
-                  key={step}
-                  onPress={() => { setWeightStep(step); void AsyncStorage.setItem(`gym-crew:weight-step:${selected.exerciseId}`, String(step)); }}
-                  style={({ pressed }) => ({ minHeight: 36, paddingHorizontal: 11, borderRadius: 12, backgroundColor: weightStep === step ? colors.primarySoft : colors.surfaceMuted, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}
-                >
-                  <AppText variant="caption" color={weightStep === step ? "primary" : "muted"}>±{step}</AppText>
-                </Pressable>
-              ))}
-              <Pressable onPress={() => setNotesOpen(true)} style={({ pressed }) => ({ flex: 1, minHeight: 36, borderRadius: 12, backgroundColor: setNotes ? colors.primarySoft : colors.surfaceMuted, paddingHorizontal: 11, flexDirection: rowDirection, alignItems: "center", justifyContent: "center", gap: 6, opacity: pressed ? 0.72 : 1 })}>
-                <StickyNote color={setNotes ? colors.primary : colors.textMuted} size={15} />
-                <AppText variant="caption" color={setNotes ? "primary" : "muted"} numberOfLines={1}>{setNotes || (language === "ar" ? "ملاحظة اختيارية" : "Optional note")}</AppText>
-              </Pressable>
-            </View>
+                <View style={{ flexDirection: rowDirection, gap: 7, alignItems: "center" }}>
+                  {[1, 2.5, 5].map((step) => (
+                    <Pressable
+                      key={step}
+                      onPress={() => { setWeightStep(step); void AsyncStorage.setItem(`gym-crew:weight-step:${selected.exerciseId}`, String(step)); }}
+                      style={({ pressed }) => ({ minHeight: 36, paddingHorizontal: 11, borderRadius: 12, backgroundColor: weightStep === step ? colors.primarySoft : colors.surfaceMuted, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}
+                    >
+                      <AppText variant="caption" color={weightStep === step ? "primary" : "muted"}>±{step}</AppText>
+                    </Pressable>
+                  ))}
+                  <Pressable onPress={() => setNotesOpen(true)} style={({ pressed }) => ({ flex: 1, minHeight: 36, borderRadius: 12, backgroundColor: setNotes ? colors.primarySoft : colors.surfaceMuted, paddingHorizontal: 11, flexDirection: rowDirection, alignItems: "center", justifyContent: "center", gap: 6, opacity: pressed ? 0.72 : 1 })}>
+                    <StickyNote color={setNotes ? colors.primaryStrong : colors.textMuted} size={15} />
+                    <AppText variant="caption" color={setNotes ? "primary" : "muted"} numberOfLines={1}>{setNotes || (language === "ar" ? "ملاحظة" : "Note")}</AppText>
+                  </Pressable>
+                </View>
+              </View>
 
-            <Button
-              disabled={reps === null}
-              loading={saving}
-              onPress={() => void logSet()}
-              icon={<Check color={colors.white} size={21} />}
-              style={{ minHeight: compact ? 56 : 62 }}
-            >
-              {language === "ar" ? "خلصت السِت — سجّلها" : "Set done — log it"}
-            </Button>
-          </View>
-        ) : (
-          <View style={{ flex: 1, justifyContent: "center", gap: spacing.md, alignItems: "center" }}>
-            <View style={{ width: 62, height: 62, borderRadius: 21, backgroundColor: colors.successSoft, alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={32} /></View>
-            <AppText variant="title3" align="center">{language === "ar" ? "خلصت السِتات المخططة" : "Planned sets complete"}</AppText>
-            <Button style={{ alignSelf: "stretch" }} onPress={goNextExercise}>{selectedIndex === session.exercises.length - 1 ? (language === "ar" ? "راجع وأنهِ التمرينة" : "Review and finish") : (language === "ar" ? "التمرين التالي" : "Next exercise")}</Button>
-            <Button style={{ alignSelf: "stretch" }} variant="secondary" onPress={() => void addExtraSet()} icon={<Plus color={colors.primary} size={18} />}>{language === "ar" ? "أضف سِت زيادة" : "Add extra set"}</Button>
-          </View>
-        )}
-      </Card>
+              <Button
+                disabled={reps === null}
+                loading={saving}
+                onPress={() => void logSet()}
+                icon={<Check color={colors.black} size={21} />}
+                style={{ minHeight: compact ? 58 : 64 }}
+              >
+                {language === "ar" ? "خلصت السِت" : "Set done"}
+              </Button>
+            </>
+          ) : (
+            <View style={{ flex: 1, justifyContent: "center", gap: spacing.md, alignItems: "center" }}>
+              <View style={{ width: 58, height: 58, borderRadius: 20, backgroundColor: colors.successSoft, alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={30} /></View>
+              <AppText variant="title3" align="center">{language === "ar" ? "التمرين ده خلص" : "Exercise complete"}</AppText>
+              <Button style={{ alignSelf: "stretch" }} onPress={goNextExercise}>{selectedIndex === session.exercises.length - 1 ? (language === "ar" ? "إنهاء التمرينة" : "Finish workout") : (language === "ar" ? "التمرين التالي" : "Next exercise")}</Button>
+              <Button style={{ alignSelf: "stretch" }} variant="secondary" onPress={() => void addExtraSet()}>{language === "ar" ? "سِت زيادة" : "Extra set"}</Button>
+            </View>
+          )}
+        </Card>
+      </View>
 
       <ActionSheet
         visible={preflightOpen}
-        title={language === "ar" ? "جاهز لتمرينة النهارده؟" : "Ready for today's workout?"}
-        description={language === "ar" ? "اختيار سريع بس قبل ما أول تمرين يفتح قدامك." : "One quick choice before your first exercise opens."}
+        title={language === "ar" ? "نبدأ بالترتيب الحالي؟" : "Use the current order?"}
         onClose={() => setPreflightOpen(false)}
         dismissible={false}
       >
-        <Button onPress={() => setPreflightOpen(false)} icon={<Check color={colors.white} size={20} />}>{language === "ar" ? "ابدأ بالترتيب الحالي" : "Use current order"}</Button>
+        <Button onPress={() => setPreflightOpen(false)} icon={<Check color={colors.black} size={20} />}>{language === "ar" ? "ابدأ بالترتيب الحالي" : "Use current order"}</Button>
         <Button variant="secondary" onPress={openReorder} icon={<Shuffle color={colors.primary} size={19} />}>{language === "ar" ? "غيّر الترتيب الأول" : "Reorder first"}</Button>
       </ActionSheet>
 
       <ActionSheet
         visible={reorderOpen}
         title={language === "ar" ? "رتّب التمرينة بسرعة" : "Quick workout order"}
-        description={language === "ar" ? "التغيير للجلسة دي فقط، وجدولك الأساسي مش هيتأثر." : "This changes only today's session, not your main split."}
-        onClose={() => setReorderOpen(false)}
+                onClose={() => setReorderOpen(false)}
         scroll
       >
         <View style={{ gap: 8 }}>
@@ -596,7 +589,7 @@ export default function GymModeScreen() {
         <Button variant="ghost" onPress={() => { setMoreOpen(false); setConfirmMode("cancel"); }} icon={<Trash2 color={colors.danger} size={19} />}><AppText color="danger" variant="bodyStrong">{language === "ar" ? "إلغاء التمرينة" : "Cancel workout"}</AppText></Button>
       </ActionSheet>
 
-      <ActionSheet visible={notesOpen} title={language === "ar" ? `ملاحظة سِت ${pendingSet?.setNumber ?? ""}` : `Set ${pendingSet?.setNumber ?? ""} note`} description={language === "ar" ? "اختيارية تمامًا، ومش هتاخد مساحة بعد ما تقفلها." : "Completely optional and hidden when closed."} onClose={() => setNotesOpen(false)}>
+      <ActionSheet visible={notesOpen} title={language === "ar" ? `ملاحظة سِت ${pendingSet?.setNumber ?? ""}` : `Set ${pendingSet?.setNumber ?? ""} note`} onClose={() => setNotesOpen(false)}>
         <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8 }}>
           {noteOptions.map((option) => <Pressable key={option} onPress={() => setSetNotes(option)} style={({ pressed }) => ({ paddingHorizontal: 12, minHeight: 38, borderRadius: 14, backgroundColor: setNotes === option ? colors.primarySoft : colors.surfaceMuted, borderWidth: 1, borderColor: setNotes === option ? colors.primary : colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}><AppText variant="smallBold" color={setNotes === option ? "primary" : "muted"}>{option}</AppText></Pressable>)}
         </View>
@@ -625,7 +618,7 @@ export default function GymModeScreen() {
           <View style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: 16, padding: 12, gap: 3 }}><AppText variant="caption" color="muted">{language === "ar" ? "سِتات" : "Sets"}</AppText><AppText variant="title3">{completedSets}</AppText></View>
           <View style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: 16, padding: 12, gap: 3 }}><AppText variant="caption" color="muted">{language === "ar" ? "فوليوم" : "Volume"}</AppText><AppText variant="smallBold">{Math.round(volume).toLocaleString()}</AppText></View>
         </View>
-        <Button loading={saving} onPress={() => void completeWorkout()} icon={<Flag color={colors.white} size={19} />}>{language === "ar" ? "إنهاء وحفظ" : "Finish and save"}</Button>
+        <Button loading={saving} onPress={() => void completeWorkout()} icon={<Flag color={colors.black} size={19} />}>{language === "ar" ? "إنهاء وحفظ" : "Finish and save"}</Button>
         <Button variant="secondary" onPress={() => setConfirmMode(null)}>{language === "ar" ? "كمّل التمرينة" : "Keep training"}</Button>
       </ActionSheet>
 

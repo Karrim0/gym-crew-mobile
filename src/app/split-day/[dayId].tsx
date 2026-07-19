@@ -10,7 +10,6 @@ import { TextField } from "@/components/ui/text-field";
 import { Pill } from "@/components/ui/pill";
 import { LoadingState, ErrorState } from "@/components/ui/states";
 import { ActionSheet } from "@/components/ui/action-sheet";
-import { AppToast } from "@/components/ui/app-toast";
 import {
   fetchPersonalSplit,
   removeSplitExercise,
@@ -40,11 +39,10 @@ export default function SplitDayScreen() {
   const [notes, setNotes] = useState("");
   const [type, setType] = useState<WorkoutType>("custom");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const [toast, setToast] = useState<{ message: string; tone: "success" | "danger" } | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string; tone: "success" | "danger" } | null>(null);
 
-  function showToast(message: string, tone: "success" | "danger" = "success") {
-    setToast({ message, tone });
-    setTimeout(() => setToast(null), 2800);
+  function showFeedback(message: string, tone: "success" | "danger" = "success") {
+    setFeedback({ message, tone });
   }
 
   const load = useCallback(async () => {
@@ -83,9 +81,9 @@ export default function SplitDayScreen() {
         dayNotes: notes,
       });
       await load();
-      showToast(language === "ar" ? "اليوم اتحدّث." : "Day updated.");
+      showFeedback(language === "ar" ? "اتحفظ." : "Saved.");
     } catch (caught) {
-      showToast(friendlyError(caught), "danger");
+      showFeedback(friendlyError(caught), "danger");
     } finally {
       setSaving(false);
     }
@@ -96,7 +94,7 @@ export default function SplitDayScreen() {
       await updateSplitExerciseTargets(exerciseId, Math.max(1, sets), Math.max(1, min), Math.max(Math.max(1, min), max));
       await load();
     } catch (caught) {
-      showToast(friendlyError(caught), "danger");
+      showFeedback(friendlyError(caught), "danger");
     }
   }
 
@@ -110,7 +108,7 @@ export default function SplitDayScreen() {
       await reorderSplitExercises(day.id, ids);
       await load();
     } catch (caught) {
-      showToast(friendlyError(caught), "danger");
+      showFeedback(friendlyError(caught), "danger");
     }
   }
 
@@ -120,9 +118,9 @@ export default function SplitDayScreen() {
       await removeSplitExercise(deleteTarget.id);
       setDeleteTarget(null);
       await load();
-      showToast(language === "ar" ? "التمرين اتمسح من اليوم." : "Exercise removed from this day.");
+      setFeedback(null);
     } catch (caught) {
-      showToast(friendlyError(caught), "danger");
+      showFeedback(friendlyError(caught), "danger");
     }
   }
 
@@ -151,6 +149,7 @@ export default function SplitDayScreen() {
         <TextField label={t("split.focus")} value={focus} onChangeText={setFocus} />
         <TextField label={t("split.notes")} value={notes} onChangeText={setNotes} multiline style={{ minHeight: 92, textAlignVertical: "top" }} />
         <Button loading={saving} onPress={() => void saveDay()}>{t("common.save")}</Button>
+        {feedback ? <AppText variant="small" color={feedback.tone === "danger" ? "danger" : "primary"}>{feedback.message}</AppText> : null}
       </Card>
 
       {type !== "rest" ? (
@@ -201,7 +200,6 @@ export default function SplitDayScreen() {
         <Button variant="secondary" onPress={() => setDeleteTarget(null)}>{t("common.cancel")}</Button>
         <Button variant="danger" onPress={() => void confirmDelete()}>{t("common.delete")}</Button>
       </ActionSheet>
-      <AppToast visible={Boolean(toast)} message={toast?.message ?? ""} tone={toast?.tone} />
     </Screen>
   );
 }

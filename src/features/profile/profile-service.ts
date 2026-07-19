@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 import type { Database, Tables } from "@/lib/supabase/database.types";
+import { cacheValue, readCachedValue } from "@/lib/offline/database";
 import type { UserProfile, UUID } from "@/types";
 
 type ProfileRow = Tables<"profiles">;
@@ -21,9 +22,18 @@ export function mapProfile(row: ProfileRow): UserProfile {
 }
 
 export async function fetchProfile(userId: UUID) {
-  const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
-  if (error) throw new Error(error.message);
-  return data ? mapProfile(data) : null;
+  const cacheKey = `profile:${userId}`;
+  try {
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+    if (error) throw error;
+    const profile = data ? mapProfile(data) : null;
+    if (profile) await cacheValue(cacheKey, profile);
+    return profile;
+  } catch (caught) {
+    const cached = await readCachedValue<UserProfile>(cacheKey);
+    if (cached) return cached;
+    throw caught;
+  }
 }
 
 export async function updateProfile(
@@ -48,7 +58,9 @@ export async function updateProfile(
   if (values.shareWeights !== undefined) patch.share_weights = values.shareWeights;
   const { data, error } = await supabase.from("profiles").update(patch).eq("id", userId).select("*").single();
   if (error) throw new Error(error.message);
-  return mapProfile(data);
+  const profile = mapProfile(data);
+  await cacheValue(`profile:${userId}`, profile);
+  return profile;
 }
 
 function extensionFrom(name?: string | null, mimeType?: string | null) {

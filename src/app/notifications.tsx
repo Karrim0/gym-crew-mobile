@@ -8,7 +8,6 @@ import { Card } from "@/components/ui/card";
 import { IconButton } from "@/components/ui/icon-button";
 import { Button } from "@/components/ui/button";
 import { ActionSheet } from "@/components/ui/action-sheet";
-import { AppToast } from "@/components/ui/app-toast";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
 import { spacing } from "@/lib/theme/tokens";
@@ -25,7 +24,6 @@ export default function NotificationsScreen() {
   const clear = useNotificationCenterStore((state) => state.clear);
   const unread = items.filter((item) => !item.readAt).length;
   const [clearOpen, setClearOpen] = useState(false);
-  const [cleared, setCleared] = useState(false);
 
   function openItem(id: string, route: string | null) {
     markRead(id);
@@ -81,9 +79,8 @@ export default function NotificationsScreen() {
       )}
       <ActionSheet visible={clearOpen} title={language === "ar" ? "مسح سجل الإشعارات؟" : "Clear notification history?"} description={language === "ar" ? "ده هيمسح السجل من الجهاز بس، ومش هيغيّر إعدادات التنبيهات." : "This only clears the local history and does not change notification settings."} onClose={() => setClearOpen(false)}>
         <Button variant="secondary" onPress={() => setClearOpen(false)}>{t("common.cancel")}</Button>
-        <Button variant="danger" onPress={() => { clear(); setClearOpen(false); setCleared(true); setTimeout(() => setCleared(false), 2400); }}>{language === "ar" ? "مسح السجل" : "Clear history"}</Button>
+        <Button variant="danger" onPress={() => { clear(); setClearOpen(false); }}>{language === "ar" ? "مسح السجل" : "Clear history"}</Button>
       </ActionSheet>
-      <AppToast visible={cleared} message={language === "ar" ? "سجل الإشعارات اتمسح." : "Notification history cleared."} tone="success" />
     </Screen>
   );
 }

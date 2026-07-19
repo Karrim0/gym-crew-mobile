@@ -61,6 +61,7 @@ export default function SettingsScreen() {
   const syncNow = useConnectivityStore((state) => state.syncNow);
   const [permission, setPermission] = useState<NotificationPermissionState>("undetermined");
   const [testing, setTesting] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
 
   const refreshPermission = useCallback(async () => setPermission(await getNotificationPermissionState()), []);
   useFocusEffect(useCallback(() => { void refreshPermission(); }, [refreshPermission]));
@@ -80,17 +81,11 @@ export default function SettingsScreen() {
     await refreshPermission();
     if (!granted) {
       settings.setNotificationsEnabled(false);
-      Alert.alert(
-        language === "ar" ? "الإشعارات مقفولة" : "Notifications are disabled",
-        language === "ar" ? "فعّلها من إعدادات الموبايل عشان تنبيه الراحة يشتغل في الخلفية." : "Enable them in system settings so rest alerts work in the background.",
-        [
-          { text: t("common.cancel"), style: "cancel" },
-          { text: language === "ar" ? "افتح الإعدادات" : "Open settings", onPress: () => void Linking.openSettings() },
-        ],
-      );
+      setNotificationMessage(language === "ar" ? "الإشعارات مقفولة من إعدادات الموبايل." : "Notifications are blocked in system settings.");
       return;
     }
     settings.setNotificationsEnabled(true);
+    setNotificationMessage(null);
   }
 
   async function testNotification() {
@@ -99,11 +94,11 @@ export default function SettingsScreen() {
       const granted = await requestNotificationPermission();
       await refreshPermission();
       if (!granted) {
-        Alert.alert(t("common.error"), language === "ar" ? "إذن الإشعارات مش متاح." : "Notification permission is not available.");
+        setNotificationMessage(language === "ar" ? "فعّل الإشعارات من إعدادات الموبايل الأول." : "Enable notifications in system settings first.");
         return;
       }
       await sendTestNotification(language, settings.soundEnabled, settings.hapticsEnabled);
-      Alert.alert(t("common.done"), language === "ar" ? "هيظهر تنبيه تجريبي خلال ثانيتين." : "A test alert will appear in two seconds.");
+      setNotificationMessage(language === "ar" ? "التنبيه التجريبي هيظهر خلال ثانيتين." : "A test notification will appear in two seconds.");
     } finally { setTesting(false); }
   }
 
@@ -136,6 +131,7 @@ export default function SettingsScreen() {
         <SettingRow icon={<Smartphone color={colors.primary} />} title={t("settings.restTimer")} />
         <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8 }}>{[60, 90, 120, 180, 240, 300].map((seconds) => <Pill key={seconds} selected={settings.defaultRestSeconds === seconds} onPress={() => settings.setDefaultRestSeconds(seconds)}>{seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}</Pill>)}</View>
         <Button variant="secondary" loading={testing} icon={<BellRing color={colors.primary} size={18} />} onPress={() => void testNotification()}>{language === "ar" ? "جرّب التنبيه" : "Test notification"}</Button>
+        {notificationMessage ? <AppText variant="small" color={permission === "denied" ? "warning" : "muted"}>{notificationMessage}</AppText> : null}
         {permission === "denied" ? <Button variant="ghost" onPress={() => void Linking.openSettings()}>{language === "ar" ? "افتح إعدادات الموبايل" : "Open system settings"}</Button> : null}
       </Card>
 
@@ -152,7 +148,7 @@ export default function SettingsScreen() {
       </Card>
 
       <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => Alert.alert(t("settings.signOut"), language === "ar" ? "متأكد إنك عايز تخرج؟" : "Are you sure?", [{ text: t("common.cancel"), style: "cancel" }, { text: t("settings.signOut"), style: "destructive", onPress: () => void signOut() }])}>{t("settings.signOut")}</Button>
-      <AppText variant="caption" color="faint" align="center">Gym Crew Mobile · 0.2.0</AppText>
+      <AppText variant="caption" color="faint" align="center">Gym Crew Mobile · 0.4.0</AppText>
     </Screen>
   );
 }

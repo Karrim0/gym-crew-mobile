@@ -1,20 +1,28 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { CalendarDays, ChevronLeft, ChevronRight, Dumbbell, MoonStar, Play, RotateCcw, Sparkles } from "lucide-react-native";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Dumbbell,
+  Flame,
+  Layers3,
+  Play,
+  RotateCcw,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react-native";
 import { Screen } from "@/components/ui/screen";
 import { AppHeader } from "@/components/layout/app-header";
 import { Card } from "@/components/ui/card";
 import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
-import { SectionHeader } from "@/components/ui/section-header";
 import { ErrorState } from "@/components/ui/states";
 import { ScreenSkeleton } from "@/components/ui/skeleton";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { ActionSheet } from "@/components/ui/action-sheet";
-import { AppToast } from "@/components/ui/app-toast";
 import { WeekStrip } from "@/components/home/week-strip";
-import { StatGrid } from "@/components/home/stat-grid";
 import { fetchEffectiveWeekSchedule } from "@/features/splits/split-service";
 import { ActiveWorkoutConflictError, fetchActiveWorkout, fetchDailyConsistencyStreak, fetchWorkoutHistory, startWorkout } from "@/features/workouts/workout-service";
 import { friendlyError } from "@/lib/supabase/errors";
@@ -25,6 +33,17 @@ import { useTranslation } from "@/lib/localization/use-translation";
 import { useSessionStore } from "@/stores/session-store";
 import type { WeeklyScheduleDayWithDetails, WorkoutSessionWithDetails } from "@/types";
 
+function MetricCard({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  const { colors } = useAppTheme();
+  return (
+    <Card elevated={false} style={{ flex: 1, minWidth: 0, padding: spacing.md, alignItems: "center", gap: 5 }}>
+      <View style={{ width: 38, height: 38, borderRadius: 14, backgroundColor: colors.primarySofter, alignItems: "center", justifyContent: "center" }}>{icon}</View>
+      <AppText variant="title3" align="center">{value}</AppText>
+      <AppText variant="caption" color="muted" align="center" numberOfLines={1}>{label}</AppText>
+    </Card>
+  );
+}
+
 export default function HomeScreen() {
   const { t, language, rowDirection, isRTL } = useTranslation();
   const { colors } = useAppTheme();
@@ -34,120 +53,177 @@ export default function HomeScreen() {
   const membership = useSessionStore((state) => state.membership);
   const [schedule, setSchedule] = useState<WeeklyScheduleDayWithDetails[]>([]);
   const [active, setActive] = useState<WorkoutSessionWithDetails | null>(null);
-  const [stats, setStats] = useState({ sessions: 0, streak: 0, volume: 0 });
+  const [history, setHistory] = useState<WorkoutSessionWithDetails[]>([]);
+  const [streak, setStreak] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [conflict, setConflict] = useState<WorkoutSessionWithDetails | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     if (!user) return;
     if (isRefresh) setRefreshing(true); else setLoading(true);
     setError(null);
     try {
-      const [week, activeSession, history, remoteStreak] = await Promise.all([
+      const [week, activeSession, recent, remoteStreak] = await Promise.all([
         fetchEffectiveWeekSchedule(user.id),
         fetchActiveWorkout(user.id),
-        fetchWorkoutHistory(user.id, 30),
-        fetchDailyConsistencyStreak().catch(() => null),
+        fetchWorkoutHistory(user.id, 60),
+        fetchDailyConsistencyStreak(user.id).catch(() => 0),
       ]);
       setSchedule(week);
       setActive(activeSession);
-      const completedSets = history.flatMap((session) => session.exercises.flatMap((exercise) => exercise.sets)).filter((set) => set.isCompleted);
-      const volume = completedSets.reduce((sum, set) => sum + (set.weightKg ?? 0) * (set.reps ?? 0), 0);
-      const recentDates = new Set(history.map((session) => session.scheduledDate));
-      let streak = 0;
-      for (let cursor = new Date(); streak < 365; cursor.setDate(cursor.getDate() - 1)) {
-        const iso = toISODateOnly(cursor);
-        const scheduled = week.find((day) => day.scheduleDate === iso);
-        if (scheduled?.workoutType === "rest" || recentDates.has(iso)) streak += 1;
-        else if (cursor.toDateString() === new Date().toDateString()) continue;
-        else break;
-      }
-      setStats({ sessions: history.length, streak: remoteStreak ?? streak, volume });
-    } catch (caught) { setError(friendlyError(caught)); }
-    finally { setLoading(false); setRefreshing(false); }
+      setHistory(recent);
+      setStreak(remoteStreak);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [user]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+
   const today = useMemo(() => schedule.find((day) => day.scheduleDate === toISODateOnly()) ?? null, [schedule]);
   const rest = today?.workoutType === "rest";
   const activeMatchesToday = Boolean(active && today && active.scheduledDate === today.scheduleDate && active.splitDayId === today.sourceSplitDayId);
-  const completedSets = active?.exercises.reduce((sum, exercise) => sum + exercise.sets.filter((set) => set.isCompleted).length, 0) ?? 0;
-  const totalSets = active?.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0) ?? 0;
+  const activeCompletedSets = active?.exercises.reduce((sum, exercise) => sum + exercise.sets.filter((set) => set.isCompleted).length, 0) ?? 0;
+  const activeTotalSets = active?.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0) ?? 0;
+  const weekDates = new Set(schedule.map((day) => day.scheduleDate));
+  const weekHistory = history.filter((session) => weekDates.has(session.scheduledDate));
+  const weekSets = weekHistory.flatMap((session) => session.exercises.flatMap((exercise) => exercise.sets)).filter((set) => set.isCompleted);
+  const weekVolume = weekSets.reduce((sum, set) => sum + (set.weightKg ?? 0) * (set.reps ?? 0), 0);
+  const plannedDays = schedule.filter((day) => day.workoutType !== "rest").length;
+  const weeklyPercent = Math.min(100, Math.round((weekHistory.length / Math.max(1, plannedDays)) * 100));
   const Arrow = isRTL ? ChevronLeft : ChevronRight;
 
   async function begin(replaceExisting = false) {
     if (!user || !membership || !today || rest || !today.sourceSplitDayId) return;
     setStarting(true);
     try {
-      const session = await startWorkout({ userId: user.id, groupId: membership.group.id, splitDayId: today.sourceSplitDayId, exercises: today.exercises, scheduledDate: today.scheduleDate, replaceExisting });
+      const session = await startWorkout({
+        userId: user.id,
+        groupId: membership.group.id,
+        splitDayId: today.sourceSplitDayId,
+        exercises: today.exercises,
+        scheduledDate: today.scheduleDate,
+        replaceExisting,
+      });
       router.push({ pathname: "/workout/[sessionId]", params: { sessionId: session.id, prepare: "1" } });
     } catch (caught) {
       if (caught instanceof ActiveWorkoutConflictError) {
         setConflict(caught.activeSession);
         return;
       }
-      setToast(friendlyError(caught));
-      setTimeout(() => setToast(null), 3000);
-    } finally { setStarting(false); }
+      setError(friendlyError(caught));
+    } finally {
+      setStarting(false);
+    }
   }
 
   if (loading) return <Screen><ScreenSkeleton /></Screen>;
   if (error && !schedule.length) return <Screen><ErrorState message={error} onRetry={() => void load()} /></Screen>;
 
+  const heroTitle = active
+    ? (activeMatchesToday ? (language === "ar" ? "كمّل تمرينتك" : "Continue workout") : (language === "ar" ? "عندك تمرينة مفتوحة" : "Workout in progress"))
+    : rest
+      ? (language === "ar" ? "يوم راحة" : "Recovery day")
+      : today?.displayName ?? (language === "ar" ? "ظبط جدولك" : "Set up your plan");
+
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-      <AppHeader title={t("home.hello", { name: profile?.displayName || "Crew" })} subtitle={t("home.ready")} />
+      <AppHeader
+        title={language === "ar" ? `أهلاً، ${profile?.displayName || "كرو"}` : `Hi, ${profile?.displayName || "Crew"}`}
+        subtitle={language === "ar" ? "جاهز لتمرينة النهارده؟" : "Ready for today?"}
+      />
 
-      <Card style={{ gap: spacing.lg, backgroundColor: rest ? colors.surface : colors.primarySofter, borderColor: rest ? colors.border : colors.primarySoft }}>
-        <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
-          <View style={{ width: 64, height: 64, borderRadius: 22, backgroundColor: rest ? colors.warningSoft : colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
-            {rest ? <MoonStar color={colors.warning} size={30} /> : <Dumbbell color={colors.primary} size={30} />}
+      <Card style={{ gap: spacing.lg, borderColor: active || !rest ? colors.primarySoft : colors.border, backgroundColor: colors.surface, padding: spacing.xl }}>
+        <View pointerEvents="none" style={{ position: "absolute", width: 190, height: 190, borderRadius: 95, backgroundColor: colors.primarySofter, end: -55, bottom: -78 }} />
+        <View pointerEvents="none" style={{ position: "absolute", width: 84, height: 84, borderRadius: 42, backgroundColor: colors.primarySoft, end: 35, top: 26, opacity: 0.65 }} />
+
+        <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: spacing.sm }}>
+          <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 7 }}>
+            <Sparkles color={colors.primaryStrong} size={17} />
+            <AppText variant="smallBold" color="primary">{language === "ar" ? "تمرين اليوم" : "Today"}</AppText>
           </View>
-          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-            <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 6 }}><Sparkles size={15} color={colors.primary} /><AppText variant="caption" color="primary">{t("home.todayWorkout")}</AppText></View>
-            <AppText variant="title2" numberOfLines={2}>{active ? (activeMatchesToday ? t("home.continue") : (language === "ar" ? "كمّل تمرينتك المفتوحة" : "Finish your open workout")) : rest ? t("home.recovery") : today?.displayName ?? t("home.setupSplit")}</AppText>
-            <AppText color="muted" numberOfLines={2}>{active ? `${formatShortDate(active.scheduledDate, language)} · ${completedSets}/${totalSets} ${t("common.sets")}` : rest ? t("home.recoveryDesc") : today ? `${today.exercises.length} ${t("common.exercises")} · ${today.focusLabel || today.displayName}` : t("home.setupSplit")}</AppText>
-          </View>
+          <Pressable onPress={() => router.push("/(tabs)/split")} style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, padding: 6 })}>
+            <CalendarDays size={20} color={colors.textMuted} />
+          </Pressable>
         </View>
-        {active ? <ProgressBar value={(completedSets / Math.max(1, totalSets)) * 100} /> : null}
+
+        <View style={{ maxWidth: "74%", gap: 6 }}>
+          <AppText variant="title1" numberOfLines={2}>{heroTitle}</AppText>
+          <AppText color="muted" numberOfLines={2}>
+            {active
+              ? `${formatShortDate(active.scheduledDate, language)} · ${activeCompletedSets}/${activeTotalSets} ${t("common.sets")}`
+              : rest
+                ? (language === "ar" ? "خد وقتك وارجع أقوى." : "Recover and come back stronger.")
+                : today
+                  ? `${today.exercises.length} ${t("common.exercises")} · ${today.focusLabel || today.displayName}`
+                  : (language === "ar" ? "اختار جدول مناسب وابدأ." : "Choose a plan to get started.")}
+          </AppText>
+        </View>
+
+        {active ? <ProgressBar value={(activeCompletedSets / Math.max(1, activeTotalSets)) * 100} /> : null}
+
         {active ? (
           <View style={{ gap: spacing.sm }}>
-            <Button icon={<RotateCcw color={colors.white} size={20} />} onPress={() => router.push(`/workout/${active.id}`)}>{t("home.continue")}</Button>
-            {!activeMatchesToday && today && !rest ? <Button variant="secondary" loading={starting} onPress={() => void begin()}>{language === "ar" ? "ابدأ تمرينة النهارده" : "Start today's workout"}</Button> : null}
+            <Button icon={<RotateCcw color={colors.black} size={20} />} onPress={() => router.push(`/workout/${active.id}`)}>{language === "ar" ? "كمّل التمرينة" : "Continue"}</Button>
+            {!activeMatchesToday && today && !rest ? <Button variant="secondary" loading={starting} onPress={() => void begin()}>{language === "ar" ? "ابدأ تمرينة النهارده" : "Start today"}</Button> : null}
           </View>
         ) : rest ? (
-          <Button variant="secondary" icon={<CalendarDays color={colors.primary} size={19} />} onPress={() => router.push("/(tabs)/split")}>{language === "ar" ? "شوف باقي الأسبوع" : "View the rest of the week"}</Button>
+          <Button variant="secondary" icon={<CalendarDays color={colors.primaryStrong} size={19} />} onPress={() => router.push("/(tabs)/split")}>{language === "ar" ? "شوف الأسبوع" : "View week"}</Button>
         ) : today?.sourceSplitDayId ? (
-          <Button loading={starting} icon={<Play fill={colors.white} color={colors.white} size={20} />} onPress={() => void begin()}>{t("home.start")}</Button>
+          <Button loading={starting} icon={<Play fill={colors.black} color={colors.black} size={19} />} onPress={() => void begin()}>{language === "ar" ? "ابدأ التمرين" : "Start workout"}</Button>
         ) : (
-          <Button onPress={() => router.push("/(tabs)/split")}>{t("home.setupSplit")}</Button>
+          <Button onPress={() => router.push("/(tabs)/split")}>{language === "ar" ? "اختار جدول" : "Choose a plan"}</Button>
         )}
       </Card>
 
-      <SectionHeader title={t("home.progress")} />
-      <StatGrid sessions={stats.sessions} streak={stats.streak} volume={stats.volume} />
+      <View style={{ flexDirection: rowDirection, gap: spacing.sm }}>
+        <MetricCard icon={<Dumbbell color={colors.primaryStrong} size={20} />} value={String(weekHistory.length)} label={language === "ar" ? "تمرينات الأسبوع" : "Workouts"} />
+        <MetricCard icon={<Layers3 color={colors.primaryStrong} size={20} />} value={String(weekSets.length)} label={language === "ar" ? "سِتات" : "Sets"} />
+        <MetricCard icon={<Flame color={colors.primaryStrong} size={20} />} value={String(streak)} label={language === "ar" ? "استمرارية" : "Streak"} />
+      </View>
 
-      <SectionHeader title={t("home.weekPlan")} action={
-        <Pressable onPress={() => router.push("/(tabs)/split")} style={{ flexDirection: rowDirection, alignItems: "center", gap: 4 }}><AppText variant="smallBold" color="primary">{language === "ar" ? "عدّل" : "Edit"}</AppText><Arrow size={16} color={colors.primary} /></Pressable>
-      } />
-      <WeekStrip days={schedule} />
+      <Card elevated={false} style={{ gap: spacing.md }}>
+        <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: spacing.sm }}>
+          <View style={{ gap: 2 }}>
+            <AppText variant="title3">{language === "ar" ? "تقدم الأسبوع" : "Weekly progress"}</AppText>
+            <AppText variant="small" color="muted">{weekHistory.length} / {plannedDays} {language === "ar" ? "أيام تمرين" : "training days"}</AppText>
+          </View>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primarySofter, borderWidth: 7, borderColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
+            <AppText variant="smallBold">{weeklyPercent}%</AppText>
+          </View>
+        </View>
+        <ProgressBar value={weeklyPercent} />
+        <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between" }}>
+          <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 6 }}><TrendingUp size={16} color={colors.primaryStrong} /><AppText variant="caption" color="muted">{Math.round(weekVolume).toLocaleString()} {t("common.kg")} {language === "ar" ? "حجم تدريبي" : "volume"}</AppText></View>
+          <Pressable onPress={() => router.push("/(tabs)/progress")} style={{ flexDirection: rowDirection, alignItems: "center", gap: 3 }}><AppText variant="smallBold" color="primary">{language === "ar" ? "التفاصيل" : "Details"}</AppText><Arrow size={16} color={colors.primaryStrong} /></Pressable>
+        </View>
+      </Card>
 
-      {error ? <Card muted elevated={false}><AppText variant="small" color="warning">{error}</AppText></Card> : null}
+      <View style={{ gap: spacing.sm }}>
+        <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between" }}>
+          <AppText variant="title3">{language === "ar" ? "الأسبوع" : "This week"}</AppText>
+          <Pressable onPress={() => router.push("/(tabs)/split")} style={{ flexDirection: rowDirection, alignItems: "center", gap: 4 }}><AppText variant="smallBold" color="primary">{language === "ar" ? "تعديل" : "Edit"}</AppText><Arrow size={16} color={colors.primaryStrong} /></Pressable>
+        </View>
+        <WeekStrip days={schedule} />
+      </View>
+
+      {error ? <AppText variant="caption" color="warning">{error}</AppText> : null}
 
       <ActionSheet
         visible={Boolean(conflict)}
-        title={language === "ar" ? "في تمرينة قديمة شغالة" : "Another workout is active"}
-        description={conflict ? (language === "ar" ? `التمرينة المفتوحة بتاريخ ${formatShortDate(conflict.scheduledDate, language)}. اختار تكملها أو تبدأ تمرينة النهارده.` : `The open workout is dated ${formatShortDate(conflict.scheduledDate, language)}. Continue it or start today's workout.`) : undefined}
+        title={language === "ar" ? "في تمرينة مفتوحة" : "Workout already open"}
+        description={conflict ? formatShortDate(conflict.scheduledDate, language) : undefined}
         onClose={() => setConflict(null)}
       >
-        <Button onPress={() => { if (!conflict) return; const id = conflict.id; setConflict(null); router.push(`/workout/${id}`); }}>{language === "ar" ? "كمّل القديمة" : "Continue old workout"}</Button>
-        <Button variant="secondary" loading={starting} onPress={() => { setConflict(null); void begin(true); }}>{language === "ar" ? "ابدأ تمرينة النهارده" : "Start today's workout"}</Button>
+        <Button onPress={() => { if (!conflict) return; const id = conflict.id; setConflict(null); router.push(`/workout/${id}`); }}>{language === "ar" ? "كمّلها" : "Continue it"}</Button>
+        <Button variant="secondary" loading={starting} onPress={() => { setConflict(null); void begin(true); }}>{language === "ar" ? "ابدأ تمرينة النهارده" : "Start today instead"}</Button>
       </ActionSheet>
-      <AppToast visible={Boolean(toast)} message={toast ?? ""} tone="danger" />
     </Screen>
   );
 }

@@ -724,6 +724,10 @@ export type Database = {
       apply_imported_split: { Args: { target_plan: Json }; Returns: undefined }
       apply_split_template: { Args: { target_template_key: string }; Returns: undefined }
       apply_girls_strength_4_template: { Args: never; Returns: undefined }
+      apply_girls_strength_4_template_v2: {
+        Args: never
+        Returns: Json
+      }
       reorder_personal_split_days: { Args: { target_ordered_day_ids: string[] }; Returns: undefined }
       get_daily_consistency_streak: {
         Args: never

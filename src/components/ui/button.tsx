@@ -19,7 +19,7 @@ export function Button({ children, variant = "primary", loading = false, icon, c
   const { rowDirection } = useTranslation();
   const background = variant === "primary" ? colors.primary : variant === "danger" ? colors.danger : variant === "success" ? colors.success : variant === "secondary" ? colors.surfaceMuted : "transparent";
   const border = variant === "secondary" ? colors.borderStrong : "transparent";
-  const textColor = variant === "primary" || variant === "danger" || variant === "success" ? colors.white : colors.text;
+  const textColor = variant === "primary" ? colors.black : variant === "danger" || variant === "success" ? colors.white : colors.text;
   return (
     <Pressable
       accessibilityRole="button"
@@ -27,7 +27,7 @@ export function Button({ children, variant = "primary", loading = false, icon, c
       {...props}
       style={({ pressed }) => [
         {
-          minHeight: compact ? 42 : 54,
+          minHeight: compact ? 42 : 56,
           borderRadius: compact ? radii.md : radii.lg,
           paddingHorizontal: compact ? spacing.md : spacing.lg,
           alignItems: "center",
@@ -37,14 +37,14 @@ export function Button({ children, variant = "primary", loading = false, icon, c
           backgroundColor: background,
           borderColor: border,
           borderWidth: variant === "secondary" ? 1 : 0,
-          opacity: disabled ? 0.45 : pressed ? 0.84 : 1,
+          opacity: disabled ? 0.45 : pressed ? 0.86 : 1,
           transform: [{ scale: pressed && !disabled ? 0.985 : 1 }],
           minWidth: 0,
           shadowColor: variant === "primary" ? colors.primary : colors.shadow,
-          shadowOpacity: variant === "primary" ? 0.18 : 0,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 7 },
-          elevation: variant === "primary" ? 2 : 0,
+          shadowOpacity: variant === "primary" ? 0.2 : 0,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: variant === "primary" ? 3 : 0,
         },
         typeof style === "function" ? style({ pressed }) : style,
       ]}

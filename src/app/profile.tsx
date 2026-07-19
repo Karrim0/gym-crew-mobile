@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, Switch, View } from "react-native";
+import { Pressable, Switch, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import { ArrowLeft, Camera, ChevronLeft, Dumbbell, LockKeyhole, Settings, ShieldCheck, Trophy } from "lucide-react-native";
@@ -43,6 +43,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [feedback, setFeedback] = useState<{ message: string; tone: "success" | "danger" } | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -60,10 +61,12 @@ export default function ProfileScreen() {
   async function save(values: Parameters<typeof updateProfile>[1]) {
     if (!user || !profile) return;
     setSaving(true);
+    setFeedback(null);
     try {
       const updated = await updateProfile(user.id, values);
       setProfile(updated);
-    } catch (error) { Alert.alert(t("common.error"), friendlyError(error)); }
+      setFeedback({ message: language === "ar" ? "اتحفظ." : "Saved.", tone: "success" });
+    } catch (error) { setFeedback({ message: friendlyError(error), tone: "danger" }); }
     finally { setSaving(false); }
   }
 
@@ -73,10 +76,11 @@ export default function ProfileScreen() {
     if (result.canceled) return;
     const asset = result.assets[0];
     setUploading(true);
+    setFeedback(null);
     try {
       const url = await uploadAvatar(user.id, asset);
       await save({ avatarUrl: url });
-    } catch (error) { Alert.alert(t("common.error"), friendlyError(error)); }
+    } catch (error) { setFeedback({ message: friendlyError(error), tone: "danger" }); }
     finally { setUploading(false); }
   }
 
@@ -116,6 +120,7 @@ export default function ProfileScreen() {
         <AppText variant="title3">{language === "ar" ? "بيانات الحساب" : "Account details"}</AppText>
         <TextField label={t("auth.displayName")} value={name} onChangeText={setName} maxLength={50} />
         <Button loading={saving} disabled={name.trim() === profile.displayName || name.trim().length < 2} onPress={() => void save({ displayName: name })}>{t("common.save")}</Button>
+        {feedback ? <AppText variant="small" color={feedback.tone === "danger" ? "danger" : "primary"}>{feedback.message}</AppText> : null}
       </Card>
 
       <Card style={{ gap: spacing.sm }}>

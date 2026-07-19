@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/database.types";
-import { cacheValue, readCachedValue } from "@/lib/offline/database";
-import { getTrainingWeekRange, normalizeISODateOnly, toISODateOnly } from "@/lib/utils/date";
+import { cacheValue, readCachedValue, removeCachedValue, removeCachedValuesLike } from "@/lib/offline/database";
+import { addDays, getTrainingWeekRange, normalizeISODateOnly, toISODateOnly, weekdayOrder } from "@/lib/utils/date";
 import type {
   Exercise,
   SplitDayColorKey,
@@ -119,15 +119,60 @@ export async function fetchEffectiveWeekSchedule(userId: UUID, anchorDate = toIS
   } catch (caught) {
     const cached = await readCachedValue<WeeklyScheduleDayWithDetails[]>(cacheKey);
     if (cached?.length) return cached;
+
+    // A new week can start while the phone is offline. In that case derive a
+    // temporary week from the last cached personal split so Home and Gym Mode
+    // remain usable until Supabase is reachable again.
+    const personal = await readCachedValue<SplitDayWithDetails[]>(`personal-split:${userId}`);
+    if (personal?.length) {
+      const byWeekday = new Map(personal.map((day) => [day.weekday, day]));
+      const derived = weekdayOrder.map((weekday, index): WeeklyScheduleDayWithDetails => {
+        const sourceDay = byWeekday.get(weekday) ?? null;
+        const scheduleDate = toISODateOnly(addDays(getTrainingWeekRange(normalizedAnchor).start, index));
+        return {
+          id: `offline-week-${userId}-${scheduleDate}`,
+          userId,
+          groupId: sourceDay?.groupId ?? "",
+          scheduleDate,
+          sourceSplitDayId: sourceDay?.id ?? null,
+          workoutType: sourceDay?.workoutType ?? "rest",
+          displayName: sourceDay?.displayName ?? "Rest",
+          focusLabel: sourceDay?.focusLabel ?? "",
+          iconKey: sourceDay?.iconKey ?? "moon",
+          colorKey: sourceDay?.colorKey ?? "blue",
+          dayNotes: sourceDay?.dayNotes ?? "",
+          isCustomized: false,
+          sourceDay,
+          exercises: sourceDay?.exercises ?? [],
+        };
+      });
+      await cacheValue(cacheKey, derived);
+      return derived;
+    }
     throw caught;
   }
 }
 
-export async function applySplitTemplate(template: SplitTemplateKey) {
+export async function applySplitTemplate(userId: UUID, template: SplitTemplateKey) {
   const result = template === "girls_strength_4"
-    ? await supabase.rpc("apply_girls_strength_4_template")
+    ? await supabase.rpc("apply_girls_strength_4_template_v2")
     : await supabase.rpc("apply_split_template", { target_template_key: template });
   if (result.error) throw new Error(result.error.message);
+
+  await Promise.all([
+    removeCachedValue(`personal-split:${userId}`),
+    removeCachedValuesLike(`week-schedule:${userId}:%`),
+  ]);
+
+  const updated = await fetchPersonalSplit(userId);
+  if (template === "girls_strength_4") {
+    const appliedExercises = updated.reduce((sum, day) => sum + day.exercises.length, 0);
+    const girlsDays = updated.filter((day) => day.displayName?.startsWith("Girls Day"));
+    if (girlsDays.length !== 4 || appliedExercises < 25) {
+      throw new Error("القالب متحفظش كامل. شغّل Migration v0.4.0 في Supabase وجرب تاني.");
+    }
+  }
+  return updated;
 }
 
 export async function reorderPersonalSplitDays(orderedDayIds: UUID[]) {

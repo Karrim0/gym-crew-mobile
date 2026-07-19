@@ -6,6 +6,8 @@ import {
   getCachedWorkout,
   getCachedWorkoutHistory,
   removeCachedWorkout,
+  cacheValue,
+  readCachedValue,
 } from "@/lib/offline/database";
 import { enqueueSync, flushSyncQueue, hasPendingEntitySync } from "@/lib/offline/sync";
 import { createId } from "@/lib/utils/id";
@@ -174,11 +176,20 @@ export async function fetchWorkoutHistory(userId: UUID, limit = 50) {
   return [...merged.values()].sort((a, b) => (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt));
 }
 
-export async function fetchDailyConsistencyStreak() {
-  const { data, error } = await supabase.rpc("get_daily_consistency_streak");
-  if (error) throw new Error(error.message);
-  const current = data?.[0]?.current_streak_days;
-  return typeof current === "number" ? current : 0;
+export async function fetchDailyConsistencyStreak(userId?: UUID) {
+  const cacheKey = `daily-streak:${userId ?? "current"}`;
+  try {
+    const { data, error } = await supabase.rpc("get_daily_consistency_streak");
+    if (error) throw error;
+    const current = data?.[0]?.current_streak_days;
+    const value = typeof current === "number" ? current : 0;
+    await cacheValue(cacheKey, value);
+    return value;
+  } catch (caught) {
+    const cached = await readCachedValue<number>(cacheKey);
+    if (cached !== null) return cached;
+    throw caught;
+  }
 }
 
 function buildExercise(
