@@ -141,6 +141,7 @@ export interface WorkoutSet {
   isWarmup: boolean;
   isCompleted: boolean;
   isPersonalRecord: boolean;
+  notes: string;
   createdAt: ISODateString;
   updatedAt: ISODateString;
 }
@@ -153,6 +154,8 @@ export interface WorkoutExercise {
   order: number;
   isSessionOnlyAddition: boolean;
   notes: string;
+  targetRepsMin: number;
+  targetRepsMax: number;
   sets: WorkoutSet[];
 }
 

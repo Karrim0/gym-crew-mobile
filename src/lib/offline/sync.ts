@@ -68,6 +68,8 @@ function exerciseRow(payload: WorkoutExercise) {
     position: payload.order,
     is_session_only_addition: payload.isSessionOnlyAddition,
     notes: payload.notes,
+    target_reps_min: payload.targetRepsMin,
+    target_reps_max: payload.targetRepsMax,
   };
 }
 
@@ -80,6 +82,7 @@ function setRow(payload: WorkoutSet) {
     reps: payload.reps,
     is_warmup: payload.isWarmup,
     is_completed: payload.isCompleted,
+    notes: payload.notes,
     updated_at: payload.updatedAt,
   };
 }

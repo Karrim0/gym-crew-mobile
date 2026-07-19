@@ -483,6 +483,8 @@ export type Database = {
           id: string
           is_session_only_addition: boolean
           notes: string
+          target_reps_max: number
+          target_reps_min: number
           position: number
           updated_at: string
           workout_session_id: string
@@ -493,6 +495,8 @@ export type Database = {
           id: string
           is_session_only_addition?: boolean
           notes?: string
+          target_reps_max?: number
+          target_reps_min?: number
           position: number
           updated_at?: string
           workout_session_id: string
@@ -503,6 +507,8 @@ export type Database = {
           id?: string
           is_session_only_addition?: boolean
           notes?: string
+          target_reps_max?: number
+          target_reps_min?: number
           position?: number
           updated_at?: string
           workout_session_id?: string
@@ -600,6 +606,7 @@ export type Database = {
           id: string
           is_completed: boolean
           is_warmup: boolean
+          notes: string
           reps: number | null
           set_number: number
           updated_at: string
@@ -611,6 +618,7 @@ export type Database = {
           id: string
           is_completed?: boolean
           is_warmup?: boolean
+          notes?: string
           reps?: number | null
           set_number: number
           updated_at?: string
@@ -622,6 +630,7 @@ export type Database = {
           id?: string
           is_completed?: boolean
           is_warmup?: boolean
+          notes?: string
           reps?: number | null
           set_number?: number
           updated_at?: string
@@ -714,6 +723,8 @@ export type Database = {
       ensure_week_schedule: { Args: { target_anchor_date?: string }; Returns: string }
       apply_imported_split: { Args: { target_plan: Json }; Returns: undefined }
       apply_split_template: { Args: { target_template_key: string }; Returns: undefined }
+      apply_girls_strength_4_template: { Args: never; Returns: undefined }
+      reorder_personal_split_days: { Args: { target_ordered_day_ids: string[] }; Returns: undefined }
       get_daily_consistency_streak: {
         Args: never
         Returns: { current_streak_days: number; longest_streak_days: number }[]

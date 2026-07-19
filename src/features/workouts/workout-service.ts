@@ -47,6 +47,7 @@ function mapSet(row: WorkoutSetRow): WorkoutSet {
     isWarmup: row.is_warmup,
     isCompleted: row.is_completed,
     isPersonalRecord: false,
+    notes: row.notes ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -60,6 +61,8 @@ function mapWorkoutExercise(row: ExerciseQueryRow): WorkoutExerciseWithDetails {
     order: row.position,
     isSessionOnlyAddition: row.is_session_only_addition,
     notes: row.notes,
+    targetRepsMin: row.target_reps_min ?? 8,
+    targetRepsMax: row.target_reps_max ?? 12,
     exercise: mapExercise(row.exercises),
     sets: [...row.workout_sets].sort((a, b) => a.set_number - b.set_number).map(mapSet),
   };
@@ -83,6 +86,19 @@ function mapSession(row: SessionQueryRow): WorkoutSessionWithDetails {
   };
 }
 
+function normalizeCachedSession(session: WorkoutSessionWithDetails): WorkoutSessionWithDetails {
+  return {
+    ...session,
+    exercises: session.exercises.map((exercise) => ({
+      ...exercise,
+      targetRepsMin: exercise.targetRepsMin ?? 8,
+      targetRepsMax: exercise.targetRepsMax ?? 12,
+      notes: exercise.notes ?? "",
+      sets: exercise.sets.map((set) => ({ ...set, notes: set.notes ?? "" })),
+    })),
+  };
+}
+
 async function fetchRemoteSession(sessionId: UUID) {
   const { data, error } = await supabase.from("workout_sessions").select(SESSION_SELECT).eq("id", sessionId).maybeSingle();
   if (error) throw new Error(error.message);
@@ -93,11 +109,14 @@ async function fetchRemoteSession(sessionId: UUID) {
 }
 
 export async function fetchWorkoutSession(sessionId: UUID) {
-  return (await getCachedWorkout(sessionId)) ?? fetchRemoteSession(sessionId);
+  const cached = await getCachedWorkout(sessionId);
+  if (cached) return normalizeCachedSession(cached);
+  return fetchRemoteSession(sessionId);
 }
 
 export async function fetchActiveWorkout(userId: UUID) {
-  const local = await getCachedActiveWorkout(userId);
+  const cachedLocal = await getCachedActiveWorkout(userId);
+  const local = cachedLocal ? normalizeCachedSession(cachedLocal) : null;
   try {
     const { data, error } = await supabase
       .from("workout_sessions")
@@ -130,7 +149,7 @@ export async function fetchActiveWorkout(userId: UUID) {
 }
 
 export async function fetchWorkoutHistory(userId: UUID, limit = 50) {
-  const local = await getCachedWorkoutHistory(userId, limit);
+  const local = (await getCachedWorkoutHistory(userId, limit)).map(normalizeCachedSession);
   const merged = new Map(local.map((session) => [session.id, session]));
   try {
     const { data, error } = await supabase
@@ -176,6 +195,8 @@ function buildExercise(
     order,
     isSessionOnlyAddition: false,
     notes: "",
+    targetRepsMin: template.targetRepsMin,
+    targetRepsMax: template.targetRepsMax,
     exercise: template.exercise,
     sets: Array.from({ length: template.targetSets }, (_, index) => ({
       id: createId(),
@@ -186,6 +207,7 @@ function buildExercise(
       isWarmup: false,
       isCompleted: false,
       isPersonalRecord: false,
+      notes: "",
       createdAt: now,
       updatedAt: now,
     })),
@@ -246,7 +268,7 @@ async function updateSessionLocal(session: WorkoutSessionWithDetails) {
 export async function logWorkoutSet(
   sessionId: UUID,
   setId: UUID,
-  values: { weightKg: number | null; reps: number; isWarmup?: boolean },
+  values: { weightKg: number | null; reps: number; notes?: string; isWarmup?: boolean },
 ) {
   if (!Number.isInteger(values.reps) || values.reps < 1 || values.reps > 1000) throw new Error("اكتب عدد عدات صحيح.");
   if (values.weightKg !== null && (!Number.isFinite(values.weightKg) || values.weightKg < 0 || values.weightKg > 5000)) {
@@ -254,24 +276,22 @@ export async function logWorkoutSet(
   }
   const session = await fetchWorkoutSession(sessionId);
   if (!session) throw new Error("التمرينة مش موجودة على الجهاز.");
-  let updatedSet: WorkoutSet | null = null;
+  const currentSet = session.exercises.flatMap((exercise) => exercise.sets).find((set) => set.id === setId);
+  if (!currentSet) throw new Error("السِت مش موجودة.");
   const now = new Date().toISOString();
+  const updatedSet: WorkoutSet = {
+    ...currentSet,
+    weightKg: values.weightKg,
+    reps: values.reps,
+    isWarmup: values.isWarmup ?? currentSet.isWarmup,
+    isCompleted: true,
+    notes: values.notes?.trim() ?? currentSet.notes,
+    updatedAt: now,
+  };
   const exercises = session.exercises.map((exercise) => ({
     ...exercise,
-    sets: exercise.sets.map((set) => {
-      if (set.id !== setId) return set;
-      updatedSet = {
-        ...set,
-        weightKg: values.weightKg,
-        reps: values.reps,
-        isWarmup: values.isWarmup ?? set.isWarmup,
-        isCompleted: true,
-        updatedAt: now,
-      };
-      return updatedSet;
-    }),
+    sets: exercise.sets.map((set) => set.id === setId ? updatedSet : set),
   }));
-  if (!updatedSet) throw new Error("السِت مش موجودة.");
   const updated = { ...session, exercises, updatedAt: now };
   await updateSessionLocal(updated);
   await enqueueSync("workoutSet", "upsert", updatedSet);
@@ -294,6 +314,7 @@ export async function addWorkoutSet(sessionId: UUID, workoutExerciseId: UUID) {
     isWarmup: false,
     isCompleted: false,
     isPersonalRecord: false,
+    notes: "",
     createdAt: now,
     updatedAt: now,
   };
@@ -355,6 +376,32 @@ export async function cancelWorkout(sessionId: UUID) {
   void flushSyncQueue();
 }
 
+export async function undoWorkoutSet(sessionId: UUID, setId: UUID) {
+  const session = await fetchWorkoutSession(sessionId);
+  if (!session) throw new Error("التمرينة مش موجودة.");
+  const currentSet = session.exercises.flatMap((exercise) => exercise.sets).find((set) => set.id === setId);
+  if (!currentSet) throw new Error("السِت مش موجودة.");
+  const now = new Date().toISOString();
+  const changed: WorkoutSet = {
+    ...currentSet,
+    weightKg: null,
+    reps: null,
+    notes: "",
+    isCompleted: false,
+    isPersonalRecord: false,
+    updatedAt: now,
+  };
+  const exercises = session.exercises.map((exercise) => ({
+    ...exercise,
+    sets: exercise.sets.map((set) => set.id === setId ? changed : set),
+  }));
+  const updated = { ...session, exercises, updatedAt: now };
+  await updateSessionLocal(updated);
+  await enqueueSync("workoutSet", "upsert", changed);
+  void flushSyncQueue();
+  return updated;
+}
+
 export async function fetchPreviousPerformances(
   userId: UUID,
   exerciseIds: UUID[],
@@ -398,6 +445,8 @@ export function createSessionOnlyExercise(
     order,
     isSessionOnlyAddition: true,
     notes: "",
+    targetRepsMin: 8,
+    targetRepsMax: 12,
     exercise,
     sets: Array.from({ length: setCount }, (_, index) => ({
       id: createId(),
@@ -408,6 +457,7 @@ export function createSessionOnlyExercise(
       isWarmup: false,
       isCompleted: false,
       isPersonalRecord: false,
+      notes: "",
       createdAt: now,
       updatedAt: now,
     })),
