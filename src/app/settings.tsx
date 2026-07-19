@@ -35,6 +35,7 @@ import { useSettingsStore, type ColorMode, type Language, type WeightUnit } from
 import { useSessionStore } from "@/stores/session-store";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { spacing } from "@/lib/theme/tokens";
+import { friendlyError } from "@/lib/supabase/errors";
 
 function SettingRow({ icon, title, description, children }: { icon: ReactNode; title: string; description?: string; children?: ReactNode }) {
   const { rowDirection } = useTranslation();
@@ -137,7 +138,7 @@ export default function SettingsScreen() {
 
       <Card style={{ gap: spacing.md }}>
         <SettingRow icon={<Cloud color={colors.primary} />} title={language === "ar" ? "المزامنة والأوفلاين" : "Sync & offline"} description={!isOnline ? (language === "ar" ? "أنت أوفلاين، كل حاجة محفوظة محليًا." : "You are offline; changes are saved locally.") : pending ? (language === "ar" ? `${pending} تعديل مستني المزامنة.` : `${pending} changes waiting to sync.`) : (language === "ar" ? "كل بياناتك متزامنة." : "All data is synced.")} />
-        {lastError ? <AppText variant="small" color="danger">{lastError}</AppText> : null}
+        {lastError ? <AppText variant="small" color="danger">{friendlyError(new Error(lastError), language === "ar" ? "المزامنة متأخرة شوية. جرّب تاني لما النت يستقر." : "Sync is delayed. Try again when the connection is stable.")}</AppText> : null}
         <Button variant="secondary" disabled={!isOnline || syncing} loading={syncing} icon={<RefreshCw color={colors.primary} size={18} />} onPress={() => void syncNow()}>{language === "ar" ? "زامن دلوقتي" : "Sync now"}</Button>
       </Card>
 
@@ -148,7 +149,7 @@ export default function SettingsScreen() {
       </Card>
 
       <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => Alert.alert(t("settings.signOut"), language === "ar" ? "متأكد إنك عايز تخرج؟" : "Are you sure?", [{ text: t("common.cancel"), style: "cancel" }, { text: t("settings.signOut"), style: "destructive", onPress: () => void signOut() }])}>{t("settings.signOut")}</Button>
-      <AppText variant="caption" color="faint" align="center">Gym Crew Mobile · 0.4.0</AppText>
+      <AppText variant="caption" color="faint" align="center">Gym Crew Mobile · 0.5.0</AppText>
     </Screen>
   );
 }

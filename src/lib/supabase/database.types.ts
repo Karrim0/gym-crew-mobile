@@ -728,6 +728,10 @@ export type Database = {
         Args: never
         Returns: Json
       }
+      apply_girls_strength_4_template_v3: {
+        Args: never
+        Returns: Json
+      }
       reorder_personal_split_days: { Args: { target_ordered_day_ids: string[] }; Returns: undefined }
       get_daily_consistency_streak: {
         Args: never

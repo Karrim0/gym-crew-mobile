@@ -14,12 +14,15 @@ import { formatShortDate } from "@/lib/utils/date";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
 import { spacing } from "@/lib/theme/tokens";
+import { formatWeight, fromKilograms } from "@/lib/utils/weight";
+import { useSettingsStore } from "@/stores/settings-store";
 import type { WorkoutSessionWithDetails } from "@/types";
 
 export default function WorkoutHistoryDetailsScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
   const { colors } = useAppTheme();
+  const weightUnit = useSettingsStore((state) => state.weightUnit);
   const { language, rowDirection, isRTL, t } = useTranslation();
   const [session, setSession] = useState<WorkoutSessionWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,7 +76,7 @@ export default function WorkoutHistoryDetailsScreen() {
           {[
             { icon: Layers3, value: summary.sets, label: t("common.sets") },
             { icon: TimerReset, value: summary.minutes, label: t("common.minutes") },
-            { icon: Dumbbell, value: Math.round(summary.volume).toLocaleString(), label: language === "ar" ? "فوليوم" : "Volume" },
+            { icon: Dumbbell, value: Math.round(fromKilograms(summary.volume, weightUnit) ?? 0).toLocaleString(), label: `${weightUnit} ${language === "ar" ? "فوليوم" : "volume"}` },
           ].map(({ icon: Icon, value, label }) => (
             <View key={label} style={{ flexGrow: 1, flexBasis: 90, backgroundColor: colors.surface, borderRadius: 16, padding: 12, gap: 4 }}>
               <Icon size={18} color={colors.primary} /><AppText variant="bodyStrong">{value}</AppText><AppText variant="caption" color="muted">{label}</AppText>
@@ -97,7 +100,7 @@ export default function WorkoutHistoryDetailsScreen() {
                     <View key={set.id} style={{ gap: 5, backgroundColor: colors.surfaceMuted, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 }}>
                       <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: spacing.md, minHeight: 30 }}>
                         <AppText variant="smallBold" color="muted">{language === "ar" ? `سِت ${set.setNumber}` : `Set ${set.setNumber}`}</AppText>
-                        <AppText variant="bodyStrong">{set.weightKg ?? 0} {t("common.kg")} × {set.reps ?? 0}</AppText>
+                        <AppText variant="bodyStrong">{formatWeight(set.weightKg, weightUnit)} × {set.reps ?? 0}</AppText>
                       </View>
                       {set.notes ? <AppText variant="caption" color="muted">📝 {set.notes}</AppText> : null}
                     </View>

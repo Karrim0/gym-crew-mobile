@@ -60,7 +60,7 @@ export default function CrewScreen() {
   }
 
   if (loading) return <Screen><ScreenSkeleton /></Screen>;
-  if (error && !stats.length) return <Screen><AppHeader title={t("crew.title")} /><ErrorState message={error} onRetry={() => void load()} /><Card muted elevated={false}><AppText variant="small" color="muted">{language === "ar" ? "لو الخطأ فيه user_id ambiguous، طبّق Migration 202607180001 على Supabase مرة واحدة." : "If the error mentions ambiguous user_id, apply migration 202607180001 to Supabase once."}</AppText></Card></Screen>;
+  if (error && !stats.length) return <Screen><AppHeader title={t("crew.title")} /><ErrorState message={language === "ar" ? "تعذر تحميل نشاط الجروب دلوقتي. جرّب تاني بعد لحظة." : "Crew activity could not load right now. Try again in a moment."} onRetry={() => void load()} /></Screen>;
   if (!membership || membership.group.isPersonal) {
     return (
       <Screen>
@@ -78,11 +78,12 @@ export default function CrewScreen() {
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
       <AppHeader title={membership.group.name} subtitle={language === "ar" ? "الترتيب على الالتزام بخطة كل واحد، مش على الأوزان." : "Ranked by plan adherence, not weight lifted."} />
 
-      <Card style={{ gap: spacing.lg, backgroundColor: colors.primarySofter, borderColor: colors.primarySoft }}>
+      <Card variant="dark" style={{ gap: spacing.lg, padding: spacing.xl, borderRadius: 30 }}>
+        <View pointerEvents="none" style={{ position: "absolute", width: 210, height: 210, borderRadius: 105, backgroundColor: colors.glow, end: -95, top: -115 }} />
         <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
-          <View style={{ width: 56, height: 56, borderRadius: 19, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}><UsersRound color={colors.primary} size={28} /></View>
-          <View style={{ flex: 1, minWidth: 0 }}><AppText variant="title3">{stats.length} {language === "ar" ? "عضو" : stats.length === 1 ? "member" : "members"}</AppText><AppText variant="small" color="muted">{summary.sessions} {language === "ar" ? "تمرينة اتسجلت الأسبوع ده" : "workouts logged this week"}</AppText></View>
-          <View style={{ alignItems: "center" }}><AppText variant="title2" color="primary" align="center">{summary.average}%</AppText><AppText variant="caption" color="muted" align="center">{language === "ar" ? "متوسط" : "average"}</AppText></View>
+          <View style={{ width: 58, height: 58, borderRadius: 20, backgroundColor: colors.heroMuted, alignItems: "center", justifyContent: "center" }}><UsersRound color={colors.primary} size={29} /></View>
+          <View style={{ flex: 1, minWidth: 0 }}><AppText variant="title2" style={{ color: colors.textOnDark }}>{stats.length} {language === "ar" ? "عضو" : stats.length === 1 ? "member" : "members"}</AppText><AppText variant="small" style={{ color: colors.textMuted }}>{summary.sessions} {language === "ar" ? "تمرينة الأسبوع ده" : "workouts this week"}</AppText></View>
+          <View style={{ alignItems: "center" }}><AppText variant="title1" color="primary" align="center">{summary.average}%</AppText><AppText variant="caption" style={{ color: colors.textMuted }} align="center">{language === "ar" ? "التزام" : "adherence"}</AppText></View>
         </View>
         <ProgressBar value={summary.average} />
       </Card>
@@ -124,7 +125,7 @@ export default function CrewScreen() {
         })}
         {!stats.length ? <Card><AppText color="muted">{language === "ar" ? "أول ما أعضاء الجروب يتمرنوا، الترتيب هيظهر هنا." : "The leaderboard will appear after members complete workouts."}</AppText></Card> : null}
       </View>
-      {error ? <Card muted elevated={false}><AppText variant="small" color="warning">{error}</AppText></Card> : null}
+      {error ? <Card muted elevated={false}><AppText variant="small" color="warning">{language === "ar" ? "معروض آخر نشاط محفوظ على الجهاز. اسحب للتحديث لما النت يستقر." : "Showing the latest activity saved on this device. Pull to refresh when the connection is stable."}</AppText></Card> : null}
     </Screen>
   );
 }

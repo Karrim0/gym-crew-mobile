@@ -21,6 +21,7 @@ interface ScreenProps extends ScrollViewProps {
   contentStyle?: ViewStyle;
   safeBottom?: boolean;
   showConnectivity?: boolean;
+  horizontalPadding?: number;
 }
 
 export function Screen({
@@ -32,6 +33,7 @@ export function Screen({
   contentStyle,
   safeBottom = true,
   showConnectivity = true,
+  horizontalPadding = spacing.md,
   contentContainerStyle,
   ...props
 }: PropsWithChildren<ScreenProps>) {
@@ -44,9 +46,9 @@ export function Screen({
           width: "100%",
           maxWidth: 760,
           alignSelf: "center",
-          paddingHorizontal: spacing.md,
-          paddingTop: spacing.md,
-          paddingBottom: footer ? 120 : spacing.xxl,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: spacing.sm,
+          paddingBottom: footer ? 124 : spacing.xxl,
           gap: spacing.lg,
           minWidth: 0,
         },

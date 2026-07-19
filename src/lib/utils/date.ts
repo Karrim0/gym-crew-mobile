@@ -19,6 +19,26 @@ export function toISODateOnly(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+export function toZonedISODateOnly(date = new Date(), timeZone = "Africa/Cairo") {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    if (value.year && value.month && value.day) return `${value.year}-${value.month}-${value.day}`;
+  } catch {
+    // Older runtimes can fall back to the device calendar date.
+  }
+  return toISODateOnly(date);
+}
+
+export function todayISODateOnly() {
+  return toZonedISODateOnly(new Date(), "Africa/Cairo");
+}
+
 /**
  * Parses a database `date` value as a local calendar day.
  *

@@ -39,10 +39,10 @@ export default function SplitDayScreen() {
   const [notes, setNotes] = useState("");
   const [type, setType] = useState<WorkoutType>("custom");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const [feedback, setFeedback] = useState<{ message: string; tone: "success" | "danger" } | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
-  function showFeedback(message: string, tone: "success" | "danger" = "success") {
-    setFeedback({ message, tone });
+  function showError(message: string) {
+    setFeedback(message);
   }
 
   const load = useCallback(async () => {
@@ -81,9 +81,9 @@ export default function SplitDayScreen() {
         dayNotes: notes,
       });
       await load();
-      showFeedback(language === "ar" ? "اتحفظ." : "Saved.");
+      setFeedback(null);
     } catch (caught) {
-      showFeedback(friendlyError(caught), "danger");
+      showError(friendlyError(caught));
     } finally {
       setSaving(false);
     }
@@ -94,7 +94,7 @@ export default function SplitDayScreen() {
       await updateSplitExerciseTargets(exerciseId, Math.max(1, sets), Math.max(1, min), Math.max(Math.max(1, min), max));
       await load();
     } catch (caught) {
-      showFeedback(friendlyError(caught), "danger");
+      showError(friendlyError(caught));
     }
   }
 
@@ -108,7 +108,7 @@ export default function SplitDayScreen() {
       await reorderSplitExercises(day.id, ids);
       await load();
     } catch (caught) {
-      showFeedback(friendlyError(caught), "danger");
+      showError(friendlyError(caught));
     }
   }
 
@@ -120,7 +120,7 @@ export default function SplitDayScreen() {
       await load();
       setFeedback(null);
     } catch (caught) {
-      showFeedback(friendlyError(caught), "danger");
+      showError(friendlyError(caught));
     }
   }
 
@@ -149,7 +149,7 @@ export default function SplitDayScreen() {
         <TextField label={t("split.focus")} value={focus} onChangeText={setFocus} />
         <TextField label={t("split.notes")} value={notes} onChangeText={setNotes} multiline style={{ minHeight: 92, textAlignVertical: "top" }} />
         <Button loading={saving} onPress={() => void saveDay()}>{t("common.save")}</Button>
-        {feedback ? <AppText variant="small" color={feedback.tone === "danger" ? "danger" : "primary"}>{feedback.message}</AppText> : null}
+        {feedback ? <AppText variant="small" color="danger">{feedback}</AppText> : null}
       </Card>
 
       {type !== "rest" ? (

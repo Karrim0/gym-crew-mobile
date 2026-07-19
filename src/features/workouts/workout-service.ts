@@ -11,7 +11,7 @@ import {
 } from "@/lib/offline/database";
 import { enqueueSync, flushSyncQueue, hasPendingEntitySync } from "@/lib/offline/sync";
 import { createId } from "@/lib/utils/id";
-import { toISODateOnly } from "@/lib/utils/date";
+import { todayISODateOnly } from "@/lib/utils/date";
 import type {
   Exercise,
   PreviousPerformanceMap,
@@ -233,7 +233,7 @@ export async function startWorkout(input: {
   scheduledDate?: string;
   replaceExisting?: boolean;
 }) {
-  const scheduledDate = input.scheduledDate ?? toISODateOnly();
+  const scheduledDate = input.scheduledDate ?? todayISODateOnly();
   const existing = await fetchActiveWorkout(input.userId).catch(() => getCachedActiveWorkout(input.userId));
   if (existing) {
     const belongsToRequestedWorkout = existing.scheduledDate === scheduledDate
@@ -445,7 +445,7 @@ export function createSessionOnlyExercise(
   sessionId: UUID,
   exercise: Exercise,
   order: number,
-  setCount = 3,
+  setCount = 2,
 ): WorkoutExerciseWithDetails {
   const now = new Date().toISOString();
   const workoutExerciseId = createId();
@@ -475,7 +475,7 @@ export function createSessionOnlyExercise(
   };
 }
 
-export async function addSessionExercise(sessionId: UUID, exercise: Exercise, setCount = 3) {
+export async function addSessionExercise(sessionId: UUID, exercise: Exercise, setCount = 2) {
   const session = await fetchWorkoutSession(sessionId);
   if (!session) throw new Error("التمرينة مش موجودة.");
   if (session.exercises.some((item) => item.exerciseId === exercise.id)) throw new Error("التمرين موجود بالفعل في الجلسة.");

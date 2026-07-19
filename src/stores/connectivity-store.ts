@@ -24,28 +24,54 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
   syncing: false,
   lastError: null,
   lastSyncedAt: null,
+
   refresh: async () => {
-    const [network, pending] = await Promise.all([Network.getNetworkStateAsync(), pendingSyncCount()]);
-    set({
-      initialized: true,
-      isConnected: network.isConnected !== false,
-      isInternetReachable: network.isInternetReachable !== false,
-      pending,
-    });
+    const pending = await pendingSyncCount().catch(() => 0);
+    try {
+      const network = await Network.getNetworkStateAsync();
+      set({
+        initialized: true,
+        isConnected: network.isConnected !== false,
+        isInternetReachable: network.isInternetReachable !== false,
+        pending,
+      });
+    } catch {
+      set({ initialized: true, isConnected: false, isInternetReachable: false, pending });
+    }
   },
+
   syncNow: async () => {
     if (get().syncing) return;
     set({ syncing: true, lastError: null });
-    const result = await flushSyncQueue();
-    set({ syncing: false, pending: result.pending, lastError: result.lastError, lastSyncedAt: !result.lastError && !result.skipped ? new Date().toISOString() : get().lastSyncedAt });
+    try {
+      const result = await flushSyncQueue();
+      set({
+        syncing: false,
+        pending: result.pending,
+        lastError: result.lastError,
+        lastSyncedAt: !result.lastError && !result.skipped ? new Date().toISOString() : get().lastSyncedAt,
+      });
+    } catch (caught) {
+      set({
+        syncing: false,
+        pending: await pendingSyncCount().catch(() => get().pending),
+        lastError: caught instanceof Error ? caught.message : String(caught),
+      });
+    }
   },
+
   initialize: async () => {
     await get().refresh();
-    const networkSubscription = Network.addNetworkStateListener((network) => {
-      const online = network.isConnected !== false && network.isInternetReachable !== false;
-      set({ isConnected: network.isConnected !== false, isInternetReachable: network.isInternetReachable !== false });
-      if (online) void get().syncNow();
-    });
+    let networkSubscription: { remove: () => void } | null = null;
+    try {
+      networkSubscription = Network.addNetworkStateListener((network) => {
+        const online = network.isConnected !== false && network.isInternetReachable !== false;
+        set({ isConnected: network.isConnected !== false, isInternetReachable: network.isInternetReachable !== false });
+        if (online) void get().syncNow();
+      });
+    } catch {
+      // The rest of the app must remain usable even if the native listener fails.
+    }
     const unsubscribeSync = subscribeSyncEvents((snapshot) => set((state) => ({
       syncing: snapshot.syncing ?? state.syncing,
       pending: snapshot.pending ?? state.pending,
@@ -53,7 +79,7 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
       lastSyncedAt: snapshot.lastSyncedAt ?? state.lastSyncedAt,
     })));
     return () => {
-      networkSubscription.remove();
+      networkSubscription?.remove();
       unsubscribeSync();
     };
   },

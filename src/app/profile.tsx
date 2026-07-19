@@ -43,7 +43,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [feedback, setFeedback] = useState<{ message: string; tone: "success" | "danger" } | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -65,8 +65,8 @@ export default function ProfileScreen() {
     try {
       const updated = await updateProfile(user.id, values);
       setProfile(updated);
-      setFeedback({ message: language === "ar" ? "اتحفظ." : "Saved.", tone: "success" });
-    } catch (error) { setFeedback({ message: friendlyError(error), tone: "danger" }); }
+      setFeedback(null);
+    } catch (error) { setFeedback(friendlyError(error)); }
     finally { setSaving(false); }
   }
 
@@ -80,7 +80,7 @@ export default function ProfileScreen() {
     try {
       const url = await uploadAvatar(user.id, asset);
       await save({ avatarUrl: url });
-    } catch (error) { setFeedback({ message: friendlyError(error), tone: "danger" }); }
+    } catch (error) { setFeedback(friendlyError(error)); }
     finally { setUploading(false); }
   }
 
@@ -95,13 +95,14 @@ export default function ProfileScreen() {
         <IconButton onPress={() => router.push("/settings")} icon={<Settings color={colors.text} size={20} />} />
       </View>
 
-      <Card style={{ alignItems: "center", gap: spacing.md, paddingVertical: spacing.xxl }}>
+      <Card variant="dark" style={{ alignItems: "center", gap: spacing.md, paddingVertical: spacing.xxl, borderRadius: 30 }}>
+        <View pointerEvents="none" style={{ position: "absolute", width: 210, height: 210, borderRadius: 105, backgroundColor: colors.glow, end: -90, top: -115 }} />
         <Pressable onPress={() => void pickAvatar()} disabled={uploading} style={{ position: "relative" }}>
           <Avatar name={profile.displayName} url={profile.avatarUrl} size={104} ring />
-          <View style={{ position: "absolute", bottom: 0, right: 0, width: 34, height: 34, borderRadius: 17, backgroundColor: colors.primary, borderWidth: 3, borderColor: colors.surface, alignItems: "center", justifyContent: "center" }}><Camera size={16} color={colors.white} /></View>
+          <View style={{ position: "absolute", bottom: 0, right: 0, width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, borderWidth: 3, borderColor: colors.hero, alignItems: "center", justifyContent: "center" }}><Camera size={16} color={colors.primaryInk} /></View>
         </Pressable>
-        <View style={{ alignItems: "center", gap: 2 }}><AppText variant="title2" align="center">{profile.displayName}</AppText><AppText color="muted" align="center">{user?.email}</AppText></View>
-        <Button compact variant="secondary" loading={uploading} onPress={() => void pickAvatar()}>{language === "ar" ? "غيّر الصورة" : "Change photo"}</Button>
+        <View style={{ alignItems: "center", gap: 2 }}><AppText variant="title2" style={{ color: colors.textOnDark }} align="center">{profile.displayName}</AppText><AppText style={{ color: colors.textMuted }} align="center">{user?.email}</AppText></View>
+        <Button compact variant="dark" loading={uploading} onPress={() => void pickAvatar()}>{language === "ar" ? "غيّر الصورة" : "Change photo"}</Button>
       </Card>
 
       <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: spacing.sm }}>
@@ -120,7 +121,7 @@ export default function ProfileScreen() {
         <AppText variant="title3">{language === "ar" ? "بيانات الحساب" : "Account details"}</AppText>
         <TextField label={t("auth.displayName")} value={name} onChangeText={setName} maxLength={50} />
         <Button loading={saving} disabled={name.trim() === profile.displayName || name.trim().length < 2} onPress={() => void save({ displayName: name })}>{t("common.save")}</Button>
-        {feedback ? <AppText variant="small" color={feedback.tone === "danger" ? "danger" : "primary"}>{feedback.message}</AppText> : null}
+        {feedback ? <AppText variant="small" color="danger">{feedback}</AppText> : null}
       </Card>
 
       <Card style={{ gap: spacing.sm }}>

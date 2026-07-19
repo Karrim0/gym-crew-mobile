@@ -145,7 +145,12 @@ export async function flushSyncQueue(): Promise<SyncResult> {
   try {
     const db = await getDatabase();
     const rows = await db.getAllAsync<QueueRow>(
-      "SELECT id, entity, entity_id, operation, payload, attempts FROM sync_queue WHERE attempts < 10 ORDER BY created_at ASC LIMIT 200",
+      `SELECT id, entity, entity_id, operation, payload, attempts
+       FROM sync_queue
+       ORDER BY
+         CASE entity WHEN 'workoutSession' THEN 0 WHEN 'workoutExercise' THEN 1 ELSE 2 END ASC,
+         created_at ASC
+       LIMIT 200`,
     );
     for (const row of rows) {
       try {
@@ -161,7 +166,9 @@ export async function flushSyncQueue(): Promise<SyncResult> {
           new Date().toISOString(),
           row.id,
         );
-        break;
+        // Keep processing unrelated mutations. A single malformed or
+        // temporarily rejected row must not hold the entire workout history.
+        continue;
       }
     }
     const pending = await pendingSyncCount();

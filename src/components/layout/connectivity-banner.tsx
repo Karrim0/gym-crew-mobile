@@ -13,17 +13,19 @@ export function ConnectivityBanner() {
   const syncing = useConnectivityStore((state) => state.syncing);
   const syncNow = useConnectivityStore((state) => state.syncNow);
   if (isConnected && pending === 0 && !syncing) return null;
+
   const offline = !isConnected;
   const label = offline
-    ? (language === "ar" ? "أوفلاين · بياناتك محفوظة" : "Offline · data saved")
+    ? (language === "ar" ? "أوفلاين · تمرينك محفوظ" : "Offline · workout saved")
     : syncing
-      ? (language === "ar" ? "جاري المزامنة" : "Syncing")
-      : (language === "ar" ? `${pending} تعديل مستني المزامنة` : `${pending} pending change${pending === 1 ? "" : "s"}`);
+      ? (language === "ar" ? "بنزامن التعديلات" : "Syncing changes")
+      : (language === "ar" ? `${pending} تعديل مستني` : `${pending} pending`);
+
   return (
     <Pressable
       disabled={offline || syncing}
       onPress={() => void syncNow()}
-      style={{
+      style={({ pressed }) => ({
         alignSelf: "flex-start",
         flexDirection: rowDirection,
         alignItems: "center",
@@ -33,10 +35,11 @@ export function ConnectivityBanner() {
         borderWidth: 1,
         borderRadius: 999,
         paddingHorizontal: 12,
-        minHeight: 36,
-      }}
+        minHeight: 34,
+        opacity: pressed ? 0.74 : 1,
+      })}
     >
-      {offline ? <CloudOff size={15} color={colors.warning} /> : syncing ? <RefreshCw size={15} color={colors.info} /> : <UploadCloud size={15} color={colors.info} />}
+      {offline ? <CloudOff size={14} color={colors.warning} /> : syncing ? <RefreshCw size={14} color={colors.info} /> : <UploadCloud size={14} color={colors.info} />}
       <View style={{ minWidth: 0 }}><AppText variant="caption" color={offline ? "warning" : "default"}>{label}</AppText></View>
     </Pressable>
   );
