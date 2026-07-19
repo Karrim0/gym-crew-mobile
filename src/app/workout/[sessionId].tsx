@@ -1,21 +1,47 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, View, useWindowDimensions } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ArrowLeft, Check, ChevronLeft, Dumbbell, MoreHorizontal, Play, Plus, StickyNote, X } from "lucide-react-native";
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronUp,
+  Circle,
+  Dumbbell,
+  Flag,
+  ListChecks,
+  MoreHorizontal,
+  Plus,
+  Shuffle,
+  StickyNote,
+  TimerReset,
+  Trash2,
+} from "lucide-react-native";
 import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Screen } from "@/components/ui/screen";
 import { TextField } from "@/components/ui/text-field";
 import { ErrorState, LoadingState } from "@/components/ui/states";
-import { MuscleCard } from "@/components/workout/muscle-card";
-import { NumberPicker } from "@/components/workout/number-picker";
+import { ProgressBar } from "@/components/ui/progress-bar";
+import { ActionSheet } from "@/components/ui/action-sheet";
+import { AppToast } from "@/components/ui/app-toast";
+import { WorkoutValueControl } from "@/components/workout/workout-value-control";
 import { RestTimerSheet } from "@/components/workout/rest-timer-sheet";
-import { WorkoutExerciseCard } from "@/components/workout/workout-exercise-card";
-import { addWorkoutSet, cancelWorkout, fetchPreviousPerformances, fetchWorkoutSession, finishWorkout, logWorkoutSet, reorderWorkoutExercises, updateWorkoutExerciseNotes } from "@/features/workouts/workout-service";
+import {
+  addWorkoutSet,
+  cancelWorkout,
+  fetchPreviousPerformances,
+  fetchWorkoutSession,
+  finishWorkout,
+  logWorkoutSet,
+  reorderWorkoutExercises,
+  undoWorkoutSet,
+} from "@/features/workouts/workout-service";
 import { friendlyError } from "@/lib/supabase/errors";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
@@ -25,333 +51,591 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useSessionStore } from "@/stores/session-store";
 import type { PreviousPerformanceMap, WorkoutExerciseWithDetails, WorkoutSessionWithDetails, WorkoutSet } from "@/types";
 
-type Stage = "list" | "ready" | "active-set" | "log" | "result";
+type ToastTone = "success" | "info" | "warning" | "danger";
+type ConfirmMode = "finish" | "cancel" | null;
 
-function nearWeights(base: number, step: number) {
-  const values = new Set<number>();
-  for (let i = -3; i <= 4; i += 1) values.add(Math.max(0, Math.round((base + i * step) * 100) / 100));
-  return [...values].sort((a, b) => a - b);
+interface LoggedSetSummary {
+  setId: string;
+  weight: number | null;
+  reps: number;
+  notes: string;
+  comparison: "new" | "same" | "better" | "changed";
+  hasNextPlannedSet: boolean;
 }
 
-function comparison(weight: number | null, reps: number, previous?: WorkoutSet) {
+function compareSet(weight: number | null, reps: number, previous?: WorkoutSet) {
   if (!previous || previous.weightKg === null || previous.reps === null) return "new" as const;
   if (weight === previous.weightKg && reps === previous.reps) return "same" as const;
-  const oldVolume = previous.weightKg * previous.reps;
-  const newVolume = (weight ?? 0) * reps;
-  return newVolume > oldVolume ? "better" as const : "changed" as const;
+  return (weight ?? 0) * reps > previous.weightKg * previous.reps ? "better" as const : "changed" as const;
 }
 
-export default function GuidedWorkoutScreen() {
-  useKeepAwake("gym-crew-active-workout");
-  const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+function completedCount(exercise: WorkoutExerciseWithDetails) {
+  return exercise.sets.filter((set) => set.isCompleted).length;
+}
+
+export default function GymModeScreen() {
+  useKeepAwake("gym-crew-gym-mode");
+  const { height } = useWindowDimensions();
+  const compact = height < 720;
+  const { sessionId, prepare } = useLocalSearchParams<{ sessionId: string; prepare?: string }>();
   const router = useRouter();
-  const user = useSessionStore((s) => s.user);
+  const user = useSessionStore((state) => state.user);
   const settings = useSettingsStore();
   const timer = useRestTimerStore();
   const { colors } = useAppTheme();
-  const { t, language, rowDirection, isRTL } = useTranslation();
+  const { language, rowDirection, isRTL, t } = useTranslation();
+
   const [session, setSession] = useState<WorkoutSessionWithDetails | null>(null);
   const [previous, setPrevious] = useState<PreviousPerformanceMap>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [stage, setStage] = useState<Stage>("list");
   const [weight, setWeight] = useState<number | null>(null);
   const [reps, setReps] = useState<number | null>(null);
   const [weightStep, setWeightStep] = useState(2.5);
-  const [customWeightOpen, setCustomWeightOpen] = useState(false);
-  const [customRepsOpen, setCustomRepsOpen] = useState(false);
-  const [customValue, setCustomValue] = useState("");
-  const [timerOpen, setTimerOpen] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notesValue, setNotesValue] = useState("");
-  const [notesSaving, setNotesSaving] = useState(false);
-  const [lastLogged, setLastLogged] = useState<{ weight: number | null; reps: number; comparison: "new" | "same" | "better" | "changed" } | null>(null);
+  const [setNotes, setSetNotes] = useState("");
+  const [lastLogged, setLastLogged] = useState<LoggedSetSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [preflightOpen, setPreflightOpen] = useState(false);
+  const [reorderOpen, setReorderOpen] = useState(false);
+  const [orderDraft, setOrderDraft] = useState<string[]>([]);
+  const [exerciseListOpen, setExerciseListOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState<"weight" | "reps" | null>(null);
+  const [customValue, setCustomValue] = useState("");
+  const [timerOpen, setTimerOpen] = useState(false);
+  const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
+  const [toast, setToast] = useState<{ message: string; tone: ToastTone; actionLabel?: string } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const preflightShown = useRef(false);
+  const selectedIdRef = useRef<string | null>(null);
+
+  const showToast = useCallback((message: string, tone: ToastTone = "success", actionLabel?: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ message, tone, actionLabel });
+    toastTimer.current = setTimeout(() => setToast(null), actionLabel ? 6500 : 2800);
+  }, []);
+
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
+  const selectExercise = useCallback((exercise: WorkoutExerciseWithDetails, performance: PreviousPerformanceMap, sourceSession: WorkoutSessionWithDetails) => {
+    selectedIdRef.current = exercise.id;
+    setSelectedId(exercise.id);
+    setLastLogged(null);
+    const pending = exercise.sets.find((set) => !set.isCompleted) ?? null;
+    const previousSet = pending
+      ? performance[exercise.exerciseId]?.sets.find((set) => set.setNumber === pending.setNumber)
+        ?? performance[exercise.exerciseId]?.sets[pending.setNumber - 1]
+      : undefined;
+    const lastCompleted = exercise.sets.filter((set) => set.isCompleted).at(-1);
+    setWeight(previousSet?.weightKg ?? lastCompleted?.weightKg ?? null);
+    setReps(previousSet?.reps ?? lastCompleted?.reps ?? exercise.targetRepsMin);
+    setSetNotes(pending?.notes ?? "");
+    void AsyncStorage.getItem(`gym-crew:weight-step:${exercise.exerciseId}`).then((stored) => {
+      const parsed = Number(stored);
+      if ([0.5, 1, 2, 2.5, 5, 10].includes(parsed)) setWeightStep(parsed);
+    });
+    if (!sourceSession.exercises.some((item) => item.id === exercise.id)) {
+      selectedIdRef.current = null;
+      setSelectedId(null);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     if (!sessionId || !user) return;
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
       const value = await fetchWorkoutSession(sessionId);
       if (!value) throw new Error(language === "ar" ? "التمرينة مش موجودة." : "Workout not found.");
+      const performance = await fetchPreviousPerformances(user.id, value.exercises.map((exercise) => exercise.exerciseId), value.id);
       setSession(value);
-      const past = await fetchPreviousPerformances(user.id, value.exercises.map((e) => e.exerciseId), value.id);
-      setPrevious(past);
-    } catch (caught) { setError(friendlyError(caught)); }
-    finally { setLoading(false); }
-  }, [language, sessionId, user]);
+      setPrevious(performance);
+      const current = value.exercises.find((exercise) => exercise.id === selectedIdRef.current);
+      const firstPending = value.exercises.find((exercise) => exercise.sets.some((set) => !set.isCompleted)) ?? value.exercises[0];
+      const target = current ?? firstPending;
+      if (target) selectExercise(target, performance, value);
+      if (prepare === "1" && !preflightShown.current) {
+        preflightShown.current = true;
+        setPreflightOpen(true);
+      }
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setLoading(false);
+    }
+  }, [language, prepare, selectExercise, sessionId, user]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
-  const selected = useMemo(() => session?.exercises.find((e) => e.id === selectedId) ?? null, [selectedId, session]);
-  const pendingSet = useMemo(() => selected?.sets.find((s) => !s.isCompleted) ?? null, [selected]);
-  const previousSet = selected && pendingSet ? previous[selected.exerciseId]?.sets.find((s) => s.setNumber === pendingSet.setNumber) ?? previous[selected.exerciseId]?.sets[pendingSet.setNumber - 1] : undefined;
 
-  useEffect(() => {
-    if (!selected) return;
-    void AsyncStorage.getItem(`gym-crew:weight-step:${selected.exerciseId}`).then((value) => {
-      const parsed = Number(value); if ([1, 2, 2.5, 5, 10].includes(parsed)) setWeightStep(parsed);
+  const selected = useMemo(() => session?.exercises.find((exercise) => exercise.id === selectedId) ?? null, [selectedId, session]);
+  const selectedIndex = useMemo(() => session && selected ? session.exercises.findIndex((exercise) => exercise.id === selected.id) : -1, [selected, session]);
+  const pendingSet = useMemo(() => selected?.sets.find((set) => !set.isCompleted) ?? null, [selected]);
+  const previousSet = useMemo(() => {
+    if (!selected || !pendingSet) return undefined;
+    return previous[selected.exerciseId]?.sets.find((set) => set.setNumber === pendingSet.setNumber)
+      ?? previous[selected.exerciseId]?.sets[pendingSet.setNumber - 1];
+  }, [pendingSet, previous, selected]);
+
+  const totalSets = useMemo(() => session?.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0) ?? 0, [session]);
+  const completedSets = useMemo(() => session?.exercises.reduce((sum, exercise) => sum + completedCount(exercise), 0) ?? 0, [session]);
+  const progress = completedSets / Math.max(1, totalSets) * 100;
+
+  function moveDraft(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= orderDraft.length) return;
+    setOrderDraft((current) => {
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
     });
-  }, [selected]);
-
-  function chooseExercise(exercise: WorkoutExerciseWithDetails) {
-    setSelectedId(exercise.id); setStage("ready"); setLastLogged(null); setNotesValue(exercise.notes);
-    const next = exercise.sets.find((s) => !s.isCompleted);
-    const old = next ? previous[exercise.exerciseId]?.sets[next.setNumber - 1] : undefined;
-    setWeight(old?.weightKg ?? exercise.sets.filter((s) => s.isCompleted).at(-1)?.weightKg ?? null);
-    setReps(old?.reps ?? exercise.sets.filter((s) => s.isCompleted).at(-1)?.reps ?? null);
   }
 
-  async function moveExercise(index: number, direction: -1 | 1) {
+  function openReorder() {
     if (!session) return;
-    const target = index + direction; if (target < 0 || target >= session.exercises.length) return;
-    const ids = session.exercises.map((e) => e.id); [ids[index], ids[target]] = [ids[target], ids[index]];
-    try { setSession(await reorderWorkoutExercises(session.id, ids)); } catch (caught) { Alert.alert(t("common.error"), friendlyError(caught)); }
+    setOrderDraft(session.exercises.map((exercise) => exercise.id));
+    setPreflightOpen(false);
+    setMoreOpen(false);
+    setReorderOpen(true);
   }
 
-  function beginSet() {
-    if (!pendingSet) return;
-    if (settings.hapticsEnabled) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setStage("active-set");
-  }
-
-  function finishPhysicalSet() { setStage("log"); }
-
-  async function commitSet() {
-    if (!session || !pendingSet || reps === null) return;
+  async function saveOrder() {
+    if (!session) return;
     setSaving(true);
     try {
-      const result = await logWorkoutSet(session.id, pendingSet.id, { weightKg: weight, reps });
-      setSession(result.session);
-      const cmp = comparison(weight, reps, previousSet);
-      setLastLogged({ weight, reps, comparison: cmp });
-      setStage("result");
-      if (settings.hapticsEnabled) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const nextNumber = pendingSet.setNumber + 1;
-      await timer.start(settings.defaultRestSeconds, `${selected?.exercise.name ?? ""} · ${language === "ar" ? "سِت" : "Set"} ${nextNumber}`, `/workout/${session.id}`);
-      setTimerOpen(true);
-    } catch (caught) { Alert.alert(t("common.error"), friendlyError(caught)); }
-    finally { setSaving(false); }
-  }
-
-  async function anotherSet() {
-    if (!session || !selected || saving) return;
-    setSaving(true);
-    try {
-      const refreshed = await addWorkoutSet(session.id, selected.id);
-      setSession(refreshed);
-      setStage("ready");
-      setLastLogged(null);
+      const updated = await reorderWorkoutExercises(session.id, orderDraft);
+      setSession(updated);
+      setReorderOpen(false);
+      const target = updated.exercises.find((exercise) => exercise.id === selectedId) ?? updated.exercises[0];
+      if (target) selectExercise(target, previous, updated);
+      showToast(language === "ar" ? "ترتيب التمرينة اتظبط." : "Workout order updated.");
     } catch (caught) {
-      Alert.alert(t("common.error"), friendlyError(caught));
+      showToast(friendlyError(caught), "danger");
     } finally {
       setSaving(false);
     }
   }
 
-  async function saveExerciseNotes() {
-    if (!session || !selected) return;
-    setNotesSaving(true);
+  async function logSet() {
+    if (!session || !selected || !pendingSet || reps === null || saving) return;
+    setSaving(true);
     try {
-      const updated = await updateWorkoutExerciseNotes(session.id, selected.id, notesValue);
+      const result = await logWorkoutSet(session.id, pendingSet.id, { weightKg: weight, reps, notes: setNotes });
+      const refreshedExercise = result.session.exercises.find((exercise) => exercise.id === selected.id);
+      const hasNextPlannedSet = Boolean(refreshedExercise?.sets.some((set) => !set.isCompleted));
+      setSession(result.session);
+      setLastLogged({
+        setId: result.set.id,
+        weight,
+        reps,
+        notes: setNotes,
+        comparison: compareSet(weight, reps, previousSet),
+        hasNextPlannedSet,
+      });
+      if (settings.hapticsEnabled) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(language === "ar" ? "السِت اتحفظت على الجهاز." : "Set saved on this device.", "success", language === "ar" ? "تراجع" : "Undo");
+    } catch (caught) {
+      showToast(friendlyError(caught), "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function undoLastSet() {
+    if (!session || !lastLogged || saving) return;
+    setSaving(true);
+    try {
+      const updated = await undoWorkoutSet(session.id, lastLogged.setId);
       setSession(updated);
-      setNotesOpen(false);
-    } catch (caught) { Alert.alert(t("common.error"), friendlyError(caught)); }
-    finally { setNotesSaving(false); }
+      const exercise = updated.exercises.find((item) => item.id === selectedId);
+      if (exercise) selectExercise(exercise, previous, updated);
+      setLastLogged(null);
+      setToast(null);
+      showToast(language === "ar" ? "رجّعنا السِت، عدّلها وسجّلها تاني." : "Set restored for editing.", "info");
+    } catch (caught) {
+      showToast(friendlyError(caught), "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function prepareSameExercise() {
+    if (!session || !selected) return;
+    const refreshed = session.exercises.find((exercise) => exercise.id === selected.id);
+    if (!refreshed) return;
+    selectExercise(refreshed, previous, session);
+    setWeight(lastLogged?.weight ?? weight);
+    setReps(lastLogged?.reps ?? reps);
+    setSetNotes("");
+  }
+
+  async function addExtraSet() {
+    if (!session || !selected || saving) return;
+    setSaving(true);
+    try {
+      const updated = await addWorkoutSet(session.id, selected.id);
+      setSession(updated);
+      const refreshed = updated.exercises.find((exercise) => exercise.id === selected.id);
+      if (refreshed) selectExercise(refreshed, previous, updated);
+      setWeight(lastLogged?.weight ?? weight);
+      setReps(lastLogged?.reps ?? reps);
+      setSetNotes("");
+    } catch (caught) {
+      showToast(friendlyError(caught), "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function goToExercise(exercise: WorkoutExerciseWithDetails) {
+    if (!session) return;
+    setExerciseListOpen(false);
+    setMoreOpen(false);
+    selectExercise(exercise, previous, session);
+  }
+
+  function goNextExercise() {
+    if (!session || selectedIndex < 0) return;
+    const next = session.exercises[selectedIndex + 1];
+    if (next) {
+      selectExercise(next, previous, session);
+      return;
+    }
+    setConfirmMode("finish");
+  }
+
+  async function startOptionalTimer() {
+    if (!session || !selected) return;
+    setMoreOpen(false);
+    if (!timer.active) {
+      await timer.start(settings.defaultRestSeconds, selected.exercise.name, `/workout/${session.id}`);
+    }
+    setTimerOpen(true);
   }
 
   async function completeWorkout() {
-    if (!session) return;
-    const completed = session.exercises.flatMap((e) => e.sets).filter((s) => s.isCompleted).length;
-    if (!completed) { Alert.alert(t("common.error"), language === "ar" ? "سجّل سِت واحدة على الأقل." : "Log at least one set first."); return; }
-    Alert.alert(t("workout.finishWorkout"), language === "ar" ? "هنحفظ كل اللي لعبته ونقفل التمرينة." : "We'll save your completed sets and close the workout.", [
-      { text: t("common.cancel"), style: "cancel" },
-      { text: t("workout.finishWorkout"), onPress: () => void (async () => {
-        setSaving(true);
-        try {
-          const seconds = Math.max(1, Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000));
-          await timer.stop();
-          await finishWorkout(session.id, seconds);
-          router.replace("/(tabs)/progress");
-        } catch (caught) {
-          Alert.alert(t("common.error"), friendlyError(caught));
-        } finally {
-          setSaving(false);
-        }
-      })() },
-    ]);
+    if (!session || saving) return;
+    if (completedSets < 1) {
+      setConfirmMode(null);
+      showToast(language === "ar" ? "سجّل سِت واحدة على الأقل الأول." : "Log at least one set first.", "warning");
+      return;
+    }
+    setSaving(true);
+    try {
+      const seconds = Math.max(1, Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000));
+      await timer.stop();
+      await finishWorkout(session.id, seconds);
+      setConfirmMode(null);
+      router.replace("/(tabs)/progress");
+    } catch (caught) {
+      showToast(friendlyError(caught), "danger");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function discard() {
-    if (!session) return;
-    Alert.alert(language === "ar" ? "تلغي التمرينة؟" : "Discard workout?", language === "ar" ? "السِتات المسجلة هتتعلّم كملغية." : "The session will be marked as cancelled.", [
-      { text: t("common.cancel"), style: "cancel" },
-      { text: t("common.delete"), style: "destructive", onPress: () => void (async () => {
-        setSaving(true);
-        try {
-          await timer.stop();
-          await cancelWorkout(session.id);
-          router.replace("/(tabs)/home");
-        } catch (caught) {
-          Alert.alert(t("common.error"), friendlyError(caught));
-        } finally {
-          setSaving(false);
-        }
-      })() },
-    ]);
+  async function discardWorkout() {
+    if (!session || saving) return;
+    setSaving(true);
+    try {
+      await timer.stop();
+      await cancelWorkout(session.id);
+      setConfirmMode(null);
+      router.replace("/(tabs)/home");
+    } catch (caught) {
+      showToast(friendlyError(caught), "danger");
+    } finally {
+      setSaving(false);
+    }
   }
-
 
   function applyCustomValue() {
-    const parsed = Number(customValue.trim().replace(",", "."));
-    if (customWeightOpen) {
-      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 5000) {
-        Alert.alert(t("common.error"), language === "ar" ? "اكتب وزن من 0 لـ 5000." : "Enter a weight from 0 to 5000.");
+    const value = Number(customValue.trim().replace(",", "."));
+    if (customOpen === "weight") {
+      if (!Number.isFinite(value) || value < 0 || value > 5000) {
+        showToast(language === "ar" ? "اكتب وزن صحيح من 0 لـ 5000." : "Enter a weight from 0 to 5000.", "warning");
         return;
       }
-      setWeight(Math.round(parsed * 100) / 100);
+      setWeight(Math.round(value * 100) / 100);
     } else {
-      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1000) {
-        Alert.alert(t("common.error"), language === "ar" ? "اكتب عدد عدات صحيح من 1 لـ 1000." : "Enter whole reps from 1 to 1000.");
+      if (!Number.isInteger(value) || value < 1 || value > 1000) {
+        showToast(language === "ar" ? "اكتب عدد عدات صحيح من 1 لـ 1000." : "Enter whole reps from 1 to 1000.", "warning");
         return;
       }
-      setReps(parsed);
+      setReps(value);
     }
-    setCustomWeightOpen(false);
-    setCustomRepsOpen(false);
+    setCustomOpen(null);
   }
 
   if (loading) return <Screen scroll={false}><LoadingState /></Screen>;
-  if (error || !session) return <Screen><ErrorState message={error ?? "Workout not found"} onRetry={() => void load()} /></Screen>;
+  if (error || !session || !selected) return <Screen><ErrorState message={error ?? (language === "ar" ? "التمرينة فاضية." : "Workout is empty.")} onRetry={() => void load()} /></Screen>;
 
-  const totalSets = session.exercises.reduce((n, e) => n + e.sets.length, 0);
-  const completedSets = session.exercises.reduce((n, e) => n + e.sets.filter((s) => s.isCompleted).length, 0);
-  const weightBase = previousSet?.weightKg ?? selected?.sets.filter((s) => s.isCompleted).at(-1)?.weightKg ?? 20;
-  const weightValues = nearWeights(weightBase ?? 20, weightStep);
-  const repsValues = Array.from({ length: 10 }, (_, i) => i + 5);
+  const past = previous[selected.exerciseId];
+  const incompleteSets = totalSets - completedSets;
+  const completedExercises = session.exercises.filter((exercise) => completedCount(exercise) > 0).length;
+  const volume = session.exercises.flatMap((exercise) => exercise.sets).filter((set) => set.isCompleted).reduce((sum, set) => sum + (set.weightKg ?? 0) * (set.reps ?? 0), 0);
+  const noteOptions = language === "ar"
+    ? ["سهل", "مناسب", "صعب", "زوّد الوزن المرة الجاية", "خفف الوزن", "راجع التكنيك"]
+    : ["Easy", "Good", "Hard", "Increase next time", "Reduce weight", "Review technique"];
 
-  if (stage === "list" || !selected) {
-    return (
-      <Screen>
-        <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm }}>
-          <Pressable onPress={() => router.replace("/(tabs)/workout")} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}>
-            {isRTL ? <ChevronLeft color={colors.text} /> : <ArrowLeft color={colors.text} />}
-          </Pressable>
-          <View style={{ flex: 1, minWidth: 0 }}><AppText variant="title2">{t("workout.chooseExercise")}</AppText><AppText color="muted" variant="small">{t("workout.chooseExerciseDesc")}</AppText></View>
-          <Pressable onPress={discard} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><MoreHorizontal color={colors.textMuted} /></Pressable>
-        </View>
-        <Card muted style={{ gap: 8 }}>
-          <View style={{ flexDirection: rowDirection, justifyContent: "space-between" }}><AppText variant="bodyStrong">{completedSets}/{totalSets} {t("common.sets")}</AppText><AppText color="primary" variant="smallBold">{Math.round((completedSets / Math.max(1, totalSets)) * 100)}%</AppText></View>
-          <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.surfaceStrong, overflow: "hidden" }}><View style={{ height: "100%", width: `${Math.round((completedSets / Math.max(1, totalSets)) * 100)}%`, backgroundColor: colors.primary }} /></View>
-        </Card>
-        <View style={{ gap: spacing.sm }}>{session.exercises.map((exercise, index) => <WorkoutExerciseCard key={exercise.id} exercise={exercise} previous={previous[exercise.exerciseId]} index={index} total={session.exercises.length} onPress={() => chooseExercise(exercise)} onMove={(direction) => void moveExercise(index, direction)} />)}</View>
-        <Button variant="secondary" icon={<Plus color={colors.primary} size={18} />} onPress={() => router.push(`/exercise-picker?sessionId=${session.id}`)}>{language === "ar" ? "ضيف تمرين للجلسة" : "Add exercise to workout"}</Button>
-        <Button variant="secondary" onPress={() => void completeWorkout()}>{t("workout.finishWorkout")}</Button>
-      </Screen>
-    );
-  }
-
-  const completedForExercise = selected.sets.filter((s) => s.isCompleted).length;
-  const allPlannedDone = !pendingSet;
   return (
-    <Screen scroll={stage !== "active-set"} contentStyle={{ flex: stage === "active-set" ? 1 : undefined }}>
+    <Screen
+      scroll={false}
+      contentStyle={{ flex: 1, paddingTop: compact ? spacing.sm : spacing.md, paddingBottom: spacing.md, gap: compact ? spacing.sm : spacing.md }}
+    >
       <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm }}>
-        <Pressable onPress={() => { setStage("list"); setSelectedId(null); }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}><X color={colors.text} /></Pressable>
-        <View style={{ flex: 1, minWidth: 0 }}><AppText variant="title2" numberOfLines={2}>{selected.exercise.name}</AppText><AppText variant="small" color="muted">{completedForExercise}/{selected.sets.length} {t("common.sets")}</AppText></View>
+        <Pressable
+          onPress={() => router.replace("/(tabs)/workout")}
+          style={({ pressed }) => ({ width: 42, height: 42, borderRadius: 15, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}
+        >
+          {isRTL ? <ChevronLeft color={colors.text} size={21} /> : <ArrowLeft color={colors.text} size={21} />}
+        </Pressable>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: spacing.sm }}>
+            <AppText variant="smallBold" color="primary">{language === "ar" ? "الجيم مود" : "Gym mode"}</AppText>
+            <AppText variant="caption" color="muted">{completedSets}/{totalSets} {t("common.sets")}</AppText>
+          </View>
+          <ProgressBar value={progress} />
+        </View>
+        <Pressable
+          onPress={() => setMoreOpen(true)}
+          style={({ pressed }) => ({ width: 42, height: 42, borderRadius: 15, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}
+        >
+          <MoreHorizontal color={colors.text} size={22} />
+        </Pressable>
       </View>
 
-      {stage === "active-set" ? (
-        <View style={{ flex: 1, minHeight: 440, alignItems: "center", justifyContent: "center", gap: spacing.xl }}>
-          <View style={{ width: 150, height: 150, borderRadius: 75, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}><Dumbbell size={64} color={colors.primary} /></View>
-          <AppText variant="title1" align="center">{t("workout.setInProgress")}</AppText>
-          <AppText color="muted" align="center">{t("workout.setInProgressDesc")}</AppText>
-          <Button onPress={finishPhysicalSet} style={{ alignSelf: "stretch" }} icon={<Check color={colors.white} />}>{t("workout.setFinished")}</Button>
-        </View>
-      ) : (
-        <>
-          <MuscleCard primary={selected.exercise.primaryMuscle} secondary={selected.exercise.secondaryMuscles} />
-          <Pressable onPress={() => { setNotesValue(selected.notes); setNotesOpen(true); }}>
-            <Card muted elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
-              <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}><StickyNote size={19} color={colors.primary} /></View>
-              <View style={{ flex: 1, minWidth: 0 }}><AppText variant="smallBold">{language === "ar" ? "ملاحظات التمرين" : "Exercise notes"}</AppText><AppText variant="small" color="muted" numberOfLines={2}>{selected.notes || (language === "ar" ? "دوس واكتب تكنيك، قبضة، أو إعداد الجهاز." : "Tap to save technique, grip, or machine setup.")}</AppText></View>
-            </Card>
+      <Card style={{ flex: 1, gap: compact ? spacing.sm : spacing.md, padding: compact ? spacing.md : spacing.lg }}>
+        <View style={{ flexDirection: rowDirection, alignItems: "flex-start", gap: spacing.sm }}>
+          <View style={{ width: compact ? 44 : 50, height: compact ? 44 : 50, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+            <Dumbbell color={colors.primary} size={compact ? 21 : 24} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+            <AppText variant={compact ? "title3" : "title2"} numberOfLines={2}>{selected.exercise.name}</AppText>
+            <AppText variant="small" color="muted" numberOfLines={1}>
+              {selected.exercise.primaryMuscle} · {language === "ar" ? `تمرين ${selectedIndex + 1} من ${session.exercises.length}` : `Exercise ${selectedIndex + 1} of ${session.exercises.length}`}
+            </AppText>
+          </View>
+          <Pressable onPress={() => setExerciseListOpen(true)} style={({ pressed }) => ({ paddingHorizontal: 10, minHeight: 38, borderRadius: 14, backgroundColor: colors.surfaceMuted, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}>
+            <AppText variant="smallBold" color="primary">{selectedIndex + 1}/{session.exercises.length}</AppText>
           </Pressable>
-          <Card muted style={{ gap: spacing.sm }}>
-            <AppText variant="smallBold" color="muted">{t("workout.lastTime")}</AppText>
-            {previous[selected.exerciseId]?.sets.length ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                {previous[selected.exerciseId].sets.map((set) => <View key={set.id} style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 }}><AppText variant="bodyStrong" align="center">{set.weightKg ?? 0} {t("common.kg")} × {set.reps}</AppText></View>)}
-              </ScrollView>
-            ) : <AppText color="muted">{t("workout.newExercise")}</AppText>}
-          </Card>
+        </View>
 
-          {allPlannedDone ? (
-            <Card style={{ gap: spacing.md, alignItems: "center" }}><Check size={42} color={colors.success} /><AppText variant="title3" align="center">{t("workout.finishExercise")}</AppText><Button onPress={() => void anotherSet()} icon={<Plus color={colors.white} />}>{t("workout.addSet")}</Button><Button variant="secondary" onPress={() => { setStage("list"); setSelectedId(null); }}>{t("workout.switchExercise")}</Button></Card>
-          ) : stage === "ready" ? (
-            <Card style={{ gap: spacing.lg, alignItems: "center" }}>
-              <AppText variant="title1" align="center">{language === "ar" ? `سِت ${pendingSet?.setNumber}` : `Set ${pendingSet?.setNumber}`}</AppText>
-              {previousSet ? <AppText color="muted" align="center">{language === "ar" ? "الهدف المقترح" : "Suggested"}: {previousSet.weightKg ?? 0} {t("common.kg")} × {previousSet.reps}</AppText> : null}
-              <Button onPress={beginSet} icon={<Play fill={colors.white} color={colors.white} />} style={{ alignSelf: "stretch" }}>{t("workout.startSet")}</Button>
-            </Card>
-          ) : stage === "log" ? (
-            <View style={{ gap: spacing.lg }}>
-              <Card style={{ gap: spacing.md }}>
-                <AppText variant="title3">{t("workout.chooseWeight")}</AppText>
-                <NumberPicker horizontal values={weightValues} value={weight} lastValue={previousSet?.weightKg} suffix={t("common.kg")} onChange={setWeight} />
-                <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8 }}>
-                  {[1, 2, 2.5, 5, 10].map((step) => <Pressable key={step} onPress={() => { setWeightStep(step); void AsyncStorage.setItem(`gym-crew:weight-step:${selected.exerciseId}`, String(step)); }} style={{ paddingHorizontal: 13, minHeight: 40, borderRadius: 20, backgroundColor: weightStep === step ? colors.primarySoft : colors.surfaceMuted, alignItems: "center", justifyContent: "center" }}><AppText variant="smallBold" color={weightStep === step ? "primary" : "muted"}>+{step}</AppText></Pressable>)}
-                  <Pressable onPress={() => { setCustomValue(weight?.toString() ?? ""); setCustomWeightOpen(true); }} style={{ paddingHorizontal: 15, minHeight: 40, borderRadius: 20, backgroundColor: colors.surfaceMuted, alignItems: "center", justifyContent: "center" }}><AppText variant="smallBold">{t("workout.custom")}</AppText></Pressable>
+        <View style={{ flexDirection: rowDirection, gap: spacing.sm }}>
+          <View style={{ flex: 1, backgroundColor: colors.primarySofter, borderRadius: 16, paddingHorizontal: 12, paddingVertical: compact ? 8 : 10, gap: 2 }}>
+            <AppText variant="caption" color="muted">{language === "ar" ? "المخطط" : "Plan"}</AppText>
+            <AppText variant="smallBold">{selected.sets.length} {t("common.sets")} · {selected.targetRepsMin}–{selected.targetRepsMax} {language === "ar" ? "عدة" : "reps"}</AppText>
+          </View>
+          <View style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: 16, paddingHorizontal: 12, paddingVertical: compact ? 8 : 10, gap: 2 }}>
+            <AppText variant="caption" color="muted">{language === "ar" ? "السِت الحالية" : "Current set"}</AppText>
+            <AppText variant="smallBold">{pendingSet ? `${pendingSet.setNumber} / ${selected.sets.length}` : (language === "ar" ? "المخطط خلص" : "Plan done")}</AppText>
+          </View>
+        </View>
+
+        <View style={{ gap: 7 }}>
+          <AppText variant="caption" color="muted">{language === "ar" ? "آخر مرة" : "Last time"}</AppText>
+          {past?.sets.length ? (
+            <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 7 }}>
+              {past.sets.slice(0, compact ? 2 : 3).map((set) => (
+                <View key={set.id} style={{ backgroundColor: colors.surfaceMuted, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 7 }}>
+                  <AppText variant="smallBold">{set.weightKg ?? 0} {t("common.kg")} × {set.reps}</AppText>
                 </View>
-              </Card>
-              <Card style={{ gap: spacing.md }}>
-                <AppText variant="title3">{t("workout.chooseReps")}</AppText>
-                <NumberPicker values={repsValues} value={reps} lastValue={previousSet?.reps} onChange={setReps} />
-                <Button variant="ghost" onPress={() => { setCustomValue(reps?.toString() ?? ""); setCustomRepsOpen(true); }}>{t("workout.custom")}</Button>
-              </Card>
-              <Button disabled={reps === null} loading={saving} onPress={() => void commitSet()}>{t("workout.logSet")}</Button>
+              ))}
+              {past.exerciseNotes ? <View style={{ flex: 1, minWidth: 120, justifyContent: "center" }}><AppText variant="caption" color="muted" numberOfLines={1}>📝 {past.exerciseNotes}</AppText></View> : null}
             </View>
-          ) : stage === "result" && lastLogged ? (
-            <Card style={{ gap: spacing.lg, alignItems: "center" }}>
-              <View style={{ width: 74, height: 74, borderRadius: 37, backgroundColor: "rgba(22,163,106,.12)", alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={38} /></View>
-              <AppText variant="title2" align="center">{t("workout.logged")}</AppText>
-              <AppText variant="display" align="center" style={{ fontSize: 34 }}>{lastLogged.weight ?? 0} {t("common.kg")} × {lastLogged.reps}</AppText>
-              <AppText color={lastLogged.comparison === "better" ? "success" : "muted"} align="center">
-                {lastLogged.comparison === "better" ? t("workout.improved") : lastLogged.comparison === "same" ? t("workout.matched") : lastLogged.comparison === "new" ? t("workout.newExercise") : language === "ar" ? "أداء مختلف واتسجل" : "Different performance logged"}
-              </AppText>
-              <View style={{ flexDirection: rowDirection, gap: spacing.sm, alignSelf: "stretch" }}>
-                <Button style={{ flex: 1 }} loading={saving} onPress={() => { if (pendingSet) { setStage("ready"); setLastLogged(null); } else { void anotherSet(); } }}>{pendingSet ? t("workout.nextSet") : t("workout.addSet")}</Button>
-                <Button style={{ flex: 1 }} variant="secondary" onPress={() => { setStage("list"); setSelectedId(null); }}>{t("workout.switchExercise")}</Button>
-              </View>
-            </Card>
-          ) : null}
-        </>
-      )}
+          ) : <AppText variant="small" color="muted">{language === "ar" ? "أول مرة تسجل التمرين ده." : "First time logging this exercise."}</AppText>}
+        </View>
 
-      <RestTimerSheet visible={timerOpen && timer.active} onClose={() => setTimerOpen(false)} onContinue={() => { setTimerOpen(false); setStage("ready"); }} />
-      <Modal visible={notesOpen} transparent animationType="fade" onRequestClose={() => setNotesOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <Card style={{ width: "100%", maxWidth: 420, gap: spacing.md }}>
-            <AppText variant="title3">{language === "ar" ? "ملاحظات التمرين" : "Exercise notes"}</AppText>
-            <TextField value={notesValue} onChangeText={setNotesValue} multiline maxLength={500} style={{ minHeight: 120, textAlignVertical: "top" }} placeholder={language === "ar" ? "مثال: المقعد على رقم 4، قبضة متوسطة..." : "Example: seat at 4, medium grip..."} />
-            <View style={{ flexDirection: rowDirection, gap: 10 }}>
-              <Button variant="secondary" style={{ flex: 1 }} onPress={() => setNotesOpen(false)}>{t("common.cancel")}</Button>
-              <Button style={{ flex: 1 }} loading={notesSaving} onPress={() => void saveExerciseNotes()}>{t("common.save")}</Button>
+        <View style={{ height: 1, backgroundColor: colors.border }} />
+
+        {lastLogged ? (
+          <View style={{ flex: 1, justifyContent: "center", gap: compact ? spacing.sm : spacing.md }}>
+            <View style={{ alignItems: "center", gap: 7 }}>
+              <View style={{ width: 54, height: 54, borderRadius: 18, backgroundColor: colors.successSoft, alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={28} /></View>
+              <AppText variant="title3" align="center">{language === "ar" ? "السِت اتسجلت" : "Set logged"}</AppText>
+              <AppText variant="title2" align="center">{lastLogged.weight ?? 0} {t("common.kg")} × {lastLogged.reps}</AppText>
+              <AppText variant="small" color={lastLogged.comparison === "better" ? "success" : "muted"} align="center">
+                {lastLogged.comparison === "better"
+                  ? (language === "ar" ? "أداء أحسن من آخر مرة 🔥" : "Better than last time 🔥")
+                  : lastLogged.comparison === "same"
+                    ? (language === "ar" ? "نفس أداء آخر مرة" : "Matched last time")
+                    : (language === "ar" ? "اتحفظ، كمّل براحتك" : "Saved. Continue when ready.")}
+              </AppText>
             </View>
-          </Card>
-        </View>
-      </Modal>
-      <Modal visible={customWeightOpen || customRepsOpen} transparent animationType="fade" onRequestClose={() => { setCustomWeightOpen(false); setCustomRepsOpen(false); }}>
-        <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <Card style={{ width: "100%", maxWidth: 420, gap: spacing.md }}>
-            <AppText variant="title3">{customWeightOpen ? t("workout.enterWeight") : t("workout.enterReps")}</AppText>
-            <TextField value={customValue} onChangeText={setCustomValue} keyboardType="decimal-pad" autoFocus />
-            <View style={{ flexDirection: rowDirection, gap: 10 }}>
-              <Button variant="secondary" style={{ flex: 1 }} onPress={() => { setCustomWeightOpen(false); setCustomRepsOpen(false); }}>{t("common.cancel")}</Button>
-              <Button style={{ flex: 1 }} onPress={applyCustomValue}>{t("common.done")}</Button>
+            {lastLogged.hasNextPlannedSet ? (
+              <>
+                <Button onPress={prepareSameExercise}>{language === "ar" ? "ادخل السِت اللي بعدها" : "Next set"}</Button>
+                <Button variant="secondary" onPress={goNextExercise}>{language === "ar" ? "كفاية، التمرين التالي" : "Enough, next exercise"}</Button>
+              </>
+            ) : (
+              <>
+                <Button onPress={goNextExercise}>{selectedIndex === session.exercises.length - 1 ? (language === "ar" ? "راجع وأنهِ التمرينة" : "Review and finish") : (language === "ar" ? "التمرين التالي" : "Next exercise")}</Button>
+                <Button variant="secondary" loading={saving} onPress={() => void addExtraSet()} icon={<Plus color={colors.primary} size={18} />}>{language === "ar" ? "أضف سِت زيادة" : "Add extra set"}</Button>
+              </>
+            )}
+          </View>
+        ) : pendingSet ? (
+          <View style={{ flex: 1, justifyContent: "space-between", gap: compact ? spacing.sm : spacing.md }}>
+            <View style={{ flexDirection: rowDirection, gap: spacing.sm }}>
+              <WorkoutValueControl
+                label={language === "ar" ? "الوزن" : "Weight"}
+                value={weight}
+                suffix={t("common.kg")}
+                step={weightStep}
+                min={0}
+                max={5000}
+                onChange={setWeight}
+                onEdit={() => { setCustomValue(weight?.toString() ?? ""); setCustomOpen("weight"); }}
+              />
+              <WorkoutValueControl
+                label={language === "ar" ? "العدات" : "Reps"}
+                value={reps}
+                step={1}
+                min={1}
+                max={1000}
+                onChange={setReps}
+                onEdit={() => { setCustomValue(reps?.toString() ?? ""); setCustomOpen("reps"); }}
+              />
             </View>
-          </Card>
+
+            <View style={{ flexDirection: rowDirection, gap: 7, alignItems: "center" }}>
+              {[1, 2.5, 5].map((step) => (
+                <Pressable
+                  key={step}
+                  onPress={() => { setWeightStep(step); void AsyncStorage.setItem(`gym-crew:weight-step:${selected.exerciseId}`, String(step)); }}
+                  style={({ pressed }) => ({ minHeight: 36, paddingHorizontal: 11, borderRadius: 12, backgroundColor: weightStep === step ? colors.primarySoft : colors.surfaceMuted, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}
+                >
+                  <AppText variant="caption" color={weightStep === step ? "primary" : "muted"}>±{step}</AppText>
+                </Pressable>
+              ))}
+              <Pressable onPress={() => setNotesOpen(true)} style={({ pressed }) => ({ flex: 1, minHeight: 36, borderRadius: 12, backgroundColor: setNotes ? colors.primarySoft : colors.surfaceMuted, paddingHorizontal: 11, flexDirection: rowDirection, alignItems: "center", justifyContent: "center", gap: 6, opacity: pressed ? 0.72 : 1 })}>
+                <StickyNote color={setNotes ? colors.primary : colors.textMuted} size={15} />
+                <AppText variant="caption" color={setNotes ? "primary" : "muted"} numberOfLines={1}>{setNotes || (language === "ar" ? "ملاحظة اختيارية" : "Optional note")}</AppText>
+              </Pressable>
+            </View>
+
+            <Button
+              disabled={reps === null}
+              loading={saving}
+              onPress={() => void logSet()}
+              icon={<Check color={colors.white} size={21} />}
+              style={{ minHeight: compact ? 56 : 62 }}
+            >
+              {language === "ar" ? "خلصت السِت — سجّلها" : "Set done — log it"}
+            </Button>
+          </View>
+        ) : (
+          <View style={{ flex: 1, justifyContent: "center", gap: spacing.md, alignItems: "center" }}>
+            <View style={{ width: 62, height: 62, borderRadius: 21, backgroundColor: colors.successSoft, alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={32} /></View>
+            <AppText variant="title3" align="center">{language === "ar" ? "خلصت السِتات المخططة" : "Planned sets complete"}</AppText>
+            <Button style={{ alignSelf: "stretch" }} onPress={goNextExercise}>{selectedIndex === session.exercises.length - 1 ? (language === "ar" ? "راجع وأنهِ التمرينة" : "Review and finish") : (language === "ar" ? "التمرين التالي" : "Next exercise")}</Button>
+            <Button style={{ alignSelf: "stretch" }} variant="secondary" onPress={() => void addExtraSet()} icon={<Plus color={colors.primary} size={18} />}>{language === "ar" ? "أضف سِت زيادة" : "Add extra set"}</Button>
+          </View>
+        )}
+      </Card>
+
+      <ActionSheet
+        visible={preflightOpen}
+        title={language === "ar" ? "جاهز لتمرينة النهارده؟" : "Ready for today's workout?"}
+        description={language === "ar" ? "اختيار سريع بس قبل ما أول تمرين يفتح قدامك." : "One quick choice before your first exercise opens."}
+        onClose={() => setPreflightOpen(false)}
+        dismissible={false}
+      >
+        <Button onPress={() => setPreflightOpen(false)} icon={<Check color={colors.white} size={20} />}>{language === "ar" ? "ابدأ بالترتيب الحالي" : "Use current order"}</Button>
+        <Button variant="secondary" onPress={openReorder} icon={<Shuffle color={colors.primary} size={19} />}>{language === "ar" ? "غيّر الترتيب الأول" : "Reorder first"}</Button>
+      </ActionSheet>
+
+      <ActionSheet
+        visible={reorderOpen}
+        title={language === "ar" ? "رتّب التمرينة بسرعة" : "Quick workout order"}
+        description={language === "ar" ? "التغيير للجلسة دي فقط، وجدولك الأساسي مش هيتأثر." : "This changes only today's session, not your main split."}
+        onClose={() => setReorderOpen(false)}
+        scroll
+      >
+        <View style={{ gap: 8 }}>
+          {orderDraft.map((id, index) => {
+            const exercise = session.exercises.find((item) => item.id === id);
+            if (!exercise) return null;
+            return (
+              <View key={id} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceMuted, borderRadius: 16, padding: 10 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}><AppText variant="smallBold" color="primary">{index + 1}</AppText></View>
+                <AppText variant="smallBold" style={{ flex: 1 }} numberOfLines={2}>{exercise.exercise.name}</AppText>
+                <Pressable disabled={index === 0} onPress={() => moveDraft(index, -1)} style={{ padding: 8, opacity: index === 0 ? 0.25 : 1 }}><ChevronUp color={colors.text} size={19} /></Pressable>
+                <Pressable disabled={index === orderDraft.length - 1} onPress={() => moveDraft(index, 1)} style={{ padding: 8, opacity: index === orderDraft.length - 1 ? 0.25 : 1 }}><ChevronDown color={colors.text} size={19} /></Pressable>
+              </View>
+            );
+          })}
         </View>
-      </Modal>
+        <Button loading={saving} onPress={() => void saveOrder()}>{language === "ar" ? "ثبّت الترتيب وابدأ" : "Save order and start"}</Button>
+      </ActionSheet>
+
+      <ActionSheet visible={exerciseListOpen} title={language === "ar" ? "تمارين النهارده" : "Today's exercises"} onClose={() => setExerciseListOpen(false)} scroll>
+        <View style={{ gap: 8 }}>
+          {session.exercises.map((exercise, index) => {
+            const done = completedCount(exercise);
+            const current = exercise.id === selected.id;
+            const complete = done >= exercise.sets.length;
+            return (
+              <Pressable key={exercise.id} onPress={() => goToExercise(exercise)} style={({ pressed }) => ({ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm, minHeight: 56, borderRadius: 16, paddingHorizontal: 12, backgroundColor: current ? colors.primarySoft : colors.surfaceMuted, borderWidth: 1, borderColor: current ? colors.primary : colors.border, opacity: pressed ? 0.72 : 1 })}>
+                {complete ? <Check color={colors.success} size={20} /> : current ? <Dumbbell color={colors.primary} size={20} /> : <Circle color={colors.textFaint} size={18} />}
+                <View style={{ flex: 1, minWidth: 0 }}><AppText variant="smallBold" numberOfLines={1}>{index + 1}. {exercise.exercise.name}</AppText><AppText variant="caption" color="muted">{done}/{exercise.sets.length} {t("common.sets")}</AppText></View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ActionSheet>
+
+      <ActionSheet visible={moreOpen} title={language === "ar" ? "خيارات التمرينة" : "Workout options"} onClose={() => setMoreOpen(false)}>
+        <Button variant="secondary" onPress={() => { setMoreOpen(false); setExerciseListOpen(true); }} icon={<ListChecks color={colors.primary} size={19} />}>{language === "ar" ? "قائمة التمارين" : "Exercise list"}</Button>
+        <Button variant="secondary" onPress={openReorder} icon={<Shuffle color={colors.primary} size={19} />}>{language === "ar" ? "غيّر ترتيب الجلسة" : "Reorder session"}</Button>
+        <Button variant="secondary" onPress={() => { setMoreOpen(false); router.push(`/exercise-picker?sessionId=${session.id}`); }} icon={<Plus color={colors.primary} size={19} />}>{language === "ar" ? "ضيف تمرين للجلسة" : "Add exercise"}</Button>
+        <Button variant="secondary" onPress={() => void startOptionalTimer()} icon={<TimerReset color={colors.primary} size={19} />}>{language === "ar" ? "مؤقت راحة اختياري" : "Optional rest timer"}</Button>
+        <Button variant="secondary" onPress={() => { setMoreOpen(false); setConfirmMode("finish"); }} icon={<Flag color={colors.primary} size={19} />}>{language === "ar" ? "أنهِ التمرينة" : "Finish workout"}</Button>
+        <Button variant="ghost" onPress={() => { setMoreOpen(false); setConfirmMode("cancel"); }} icon={<Trash2 color={colors.danger} size={19} />}><AppText color="danger" variant="bodyStrong">{language === "ar" ? "إلغاء التمرينة" : "Cancel workout"}</AppText></Button>
+      </ActionSheet>
+
+      <ActionSheet visible={notesOpen} title={language === "ar" ? `ملاحظة سِت ${pendingSet?.setNumber ?? ""}` : `Set ${pendingSet?.setNumber ?? ""} note`} description={language === "ar" ? "اختيارية تمامًا، ومش هتاخد مساحة بعد ما تقفلها." : "Completely optional and hidden when closed."} onClose={() => setNotesOpen(false)}>
+        <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8 }}>
+          {noteOptions.map((option) => <Pressable key={option} onPress={() => setSetNotes(option)} style={({ pressed }) => ({ paddingHorizontal: 12, minHeight: 38, borderRadius: 14, backgroundColor: setNotes === option ? colors.primarySoft : colors.surfaceMuted, borderWidth: 1, borderColor: setNotes === option ? colors.primary : colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}><AppText variant="smallBold" color={setNotes === option ? "primary" : "muted"}>{option}</AppText></Pressable>)}
+        </View>
+        <TextField value={setNotes} onChangeText={setSetNotes} maxLength={240} multiline style={{ minHeight: 94, textAlignVertical: "top" }} placeholder={language === "ar" ? "مثال: الكرسي رقم 4، القبضة أضيق..." : "Example: seat 4, narrower grip..."} />
+        <View style={{ flexDirection: rowDirection, gap: spacing.sm }}>
+          <Button style={{ flex: 1 }} variant="secondary" onPress={() => { setSetNotes(""); setNotesOpen(false); }}>{language === "ar" ? "امسح" : "Clear"}</Button>
+          <Button style={{ flex: 1 }} onPress={() => setNotesOpen(false)}>{language === "ar" ? "تمام" : "Done"}</Button>
+        </View>
+      </ActionSheet>
+
+      <ActionSheet visible={customOpen !== null} title={customOpen === "weight" ? (language === "ar" ? "اكتب الوزن" : "Enter weight") : (language === "ar" ? "اكتب العدات" : "Enter reps")} onClose={() => setCustomOpen(null)}>
+        <TextField value={customValue} onChangeText={setCustomValue} keyboardType="decimal-pad" autoFocus />
+        <Button onPress={applyCustomValue}>{language === "ar" ? "استخدم الرقم" : "Use value"}</Button>
+      </ActionSheet>
+
+      <ActionSheet
+        visible={confirmMode === "finish"}
+        title={language === "ar" ? "جاهز تنهي التمرينة؟" : "Ready to finish?"}
+        description={incompleteSets > 0
+          ? (language === "ar" ? `فيه ${incompleteSets} سِت غير مكتملة، وتقدر تنهي عادي.` : `${incompleteSets} sets are incomplete. You can still finish.`)
+          : (language === "ar" ? "كل السِتات المخططة اتعملت." : "All planned sets are complete.")}
+        onClose={() => setConfirmMode(null)}
+      >
+        <View style={{ flexDirection: rowDirection, gap: spacing.sm }}>
+          <View style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: 16, padding: 12, gap: 3 }}><AppText variant="caption" color="muted">{language === "ar" ? "تمارين" : "Exercises"}</AppText><AppText variant="title3">{completedExercises}</AppText></View>
+          <View style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: 16, padding: 12, gap: 3 }}><AppText variant="caption" color="muted">{language === "ar" ? "سِتات" : "Sets"}</AppText><AppText variant="title3">{completedSets}</AppText></View>
+          <View style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: 16, padding: 12, gap: 3 }}><AppText variant="caption" color="muted">{language === "ar" ? "فوليوم" : "Volume"}</AppText><AppText variant="smallBold">{Math.round(volume).toLocaleString()}</AppText></View>
+        </View>
+        <Button loading={saving} onPress={() => void completeWorkout()} icon={<Flag color={colors.white} size={19} />}>{language === "ar" ? "إنهاء وحفظ" : "Finish and save"}</Button>
+        <Button variant="secondary" onPress={() => setConfirmMode(null)}>{language === "ar" ? "كمّل التمرينة" : "Keep training"}</Button>
+      </ActionSheet>
+
+      <ActionSheet visible={confirmMode === "cancel"} title={language === "ar" ? "تلغي التمرينة؟" : "Cancel workout?"} description={language === "ar" ? "السِتات المسجلة هتفضل في النسخة الملغية، لكن التمرينة مش هتظهر كمكتملة." : "Logged sets remain in the cancelled session, but it will not count as completed."} onClose={() => setConfirmMode(null)}>
+        <Button variant="secondary" onPress={() => setConfirmMode(null)}>{language === "ar" ? "لا، كمّل" : "Keep workout"}</Button>
+        <Button variant="danger" loading={saving} onPress={() => void discardWorkout()}>{language === "ar" ? "إلغاء التمرينة" : "Cancel workout"}</Button>
+      </ActionSheet>
+
+      <RestTimerSheet visible={timerOpen && timer.active} onClose={() => setTimerOpen(false)} onContinue={() => setTimerOpen(false)} />
+      <AppToast visible={Boolean(toast)} message={toast?.message ?? ""} tone={toast?.tone} actionLabel={toast?.actionLabel} onAction={toast?.actionLabel ? () => void undoLastSet() : undefined} />
     </Screen>
   );
 }

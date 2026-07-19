@@ -21,13 +21,14 @@ interface RestTimerState {
   getRemaining: () => number;
 }
 
-async function schedule(seconds: number, route: string | null) {
+async function schedule(seconds: number, route: string | null, nextLabel?: string | null) {
   const settings = useSettingsStore.getState();
   if (!settings.notificationsEnabled) return null;
   return scheduleRestComplete(seconds, settings.language, {
     route: route ?? "/(tabs)/workout",
     soundEnabled: settings.soundEnabled,
     hapticsEnabled: settings.hapticsEnabled,
+    nextLabel,
   }).catch(() => null);
 }
 
@@ -51,7 +52,7 @@ export const useRestTimerStore = create<RestTimerState>()(
       start: async (seconds, nextLabel, route) => {
         await cancelRestNotification(get().notificationId);
         const safe = Math.max(1, Math.floor(seconds));
-        const notificationId = await schedule(safe, route ?? null);
+        const notificationId = await schedule(safe, route ?? null, nextLabel ?? null);
         set({ active: true, paused: false, durationSeconds: safe, remainingWhenPaused: safe, endsAt: Date.now() + safe * 1000, notificationId, nextLabel: nextLabel ?? null, route: route ?? null });
       },
       pause: async () => {
@@ -63,7 +64,7 @@ export const useRestTimerStore = create<RestTimerState>()(
         const state = get();
         if (!state.active || !state.paused) return;
         const safe = Math.max(1, state.remainingWhenPaused);
-        const notificationId = await schedule(safe, state.route);
+        const notificationId = await schedule(safe, state.route, state.nextLabel);
         set({ paused: false, endsAt: Date.now() + safe * 1000, notificationId });
       },
       addSeconds: async (delta) => {
@@ -79,7 +80,7 @@ export const useRestTimerStore = create<RestTimerState>()(
           set({ remainingWhenPaused: next, notificationId: null });
           return;
         }
-        const notificationId = await schedule(next, state.route);
+        const notificationId = await schedule(next, state.route, state.nextLabel);
         set({ endsAt: Date.now() + next * 1000, remainingWhenPaused: next, notificationId });
       },
       stop: async () => {

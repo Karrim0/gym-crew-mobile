@@ -94,9 +94,12 @@ export default function WorkoutHistoryDetailsScreen() {
               {completed.length ? (
                 <View style={{ gap: 8 }}>
                   {completed.map((set) => (
-                    <View key={set.id} style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: spacing.md, backgroundColor: colors.surfaceMuted, borderRadius: 14, paddingHorizontal: 14, minHeight: 46 }}>
-                      <AppText variant="smallBold" color="muted">{language === "ar" ? `سِت ${set.setNumber}` : `Set ${set.setNumber}`}</AppText>
-                      <AppText variant="bodyStrong">{set.weightKg ?? 0} {t("common.kg")} × {set.reps ?? 0}</AppText>
+                    <View key={set.id} style={{ gap: 5, backgroundColor: colors.surfaceMuted, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 }}>
+                      <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: spacing.md, minHeight: 30 }}>
+                        <AppText variant="smallBold" color="muted">{language === "ar" ? `سِت ${set.setNumber}` : `Set ${set.setNumber}`}</AppText>
+                        <AppText variant="bodyStrong">{set.weightKg ?? 0} {t("common.kg")} × {set.reps ?? 0}</AppText>
+                      </View>
+                      {set.notes ? <AppText variant="caption" color="muted">📝 {set.notes}</AppText> : null}
                     </View>
                   ))}
                 </View>

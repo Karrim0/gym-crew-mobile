@@ -23,6 +23,8 @@ type SplitExerciseQueryRow = SplitExerciseRow & { exercises: ExerciseRow };
 type SplitDayQueryRow = SplitDayRow & { split_exercises: SplitExerciseQueryRow[] };
 type WeeklyScheduleQueryRow = WeeklyScheduleRow & { split_days: SplitDayQueryRow | null };
 
+export type SplitTemplateKey = "manual" | "full_body_3" | "upper_lower_4" | "ppl_ul_5" | "ppl_6" | "girls_strength_4";
+
 function mapSplitExercise(row: SplitExerciseQueryRow): SplitExerciseWithDetails {
   return {
     id: row.id,
@@ -121,8 +123,18 @@ export async function fetchEffectiveWeekSchedule(userId: UUID, anchorDate = toIS
   }
 }
 
-export async function applySplitTemplate(template: "manual" | "full_body_3" | "upper_lower_4" | "ppl_ul_5" | "ppl_6") {
-  const { error } = await supabase.rpc("apply_split_template", { target_template_key: template });
+export async function applySplitTemplate(template: SplitTemplateKey) {
+  const result = template === "girls_strength_4"
+    ? await supabase.rpc("apply_girls_strength_4_template")
+    : await supabase.rpc("apply_split_template", { target_template_key: template });
+  if (result.error) throw new Error(result.error.message);
+}
+
+export async function reorderPersonalSplitDays(orderedDayIds: UUID[]) {
+  if (orderedDayIds.length !== 7 || new Set(orderedDayIds).size !== 7) {
+    throw new Error("لازم ترتّب أيام الأسبوع السبعة.");
+  }
+  const { error } = await supabase.rpc("reorder_personal_split_days", { target_ordered_day_ids: orderedDayIds });
   if (error) throw new Error(error.message);
 }
 

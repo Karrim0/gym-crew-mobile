@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { CalendarDays, ChevronLeft, ChevronRight, Dumbbell, MoonStar, Play, RotateCcw, Sparkles } from "lucide-react-native";
 import { Screen } from "@/components/ui/screen";
@@ -11,6 +11,8 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { ErrorState } from "@/components/ui/states";
 import { ScreenSkeleton } from "@/components/ui/skeleton";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { ActionSheet } from "@/components/ui/action-sheet";
+import { AppToast } from "@/components/ui/app-toast";
 import { WeekStrip } from "@/components/home/week-strip";
 import { StatGrid } from "@/components/home/stat-grid";
 import { fetchEffectiveWeekSchedule } from "@/features/splits/split-service";
@@ -37,6 +39,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [conflict, setConflict] = useState<WorkoutSessionWithDetails | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     if (!user) return;
@@ -80,21 +84,14 @@ export default function HomeScreen() {
     setStarting(true);
     try {
       const session = await startWorkout({ userId: user.id, groupId: membership.group.id, splitDayId: today.sourceSplitDayId, exercises: today.exercises, scheduledDate: today.scheduleDate, replaceExisting });
-      router.push(`/workout/${session.id}`);
+      router.push({ pathname: "/workout/[sessionId]", params: { sessionId: session.id, prepare: "1" } });
     } catch (caught) {
       if (caught instanceof ActiveWorkoutConflictError) {
-        Alert.alert(
-          language === "ar" ? "في تمرينة قديمة شغالة" : "Another workout is active",
-          language === "ar" ? `التمرينة المفتوحة بتاريخ ${formatShortDate(caught.activeSession.scheduledDate, language)}.` : `The open workout is dated ${formatShortDate(caught.activeSession.scheduledDate, language)}.`,
-          [
-            { text: t("common.cancel"), style: "cancel" },
-            { text: language === "ar" ? "كمّل القديمة" : "Continue old", onPress: () => router.push(`/workout/${caught.activeSession.id}`) },
-            { text: language === "ar" ? "ابدأ النهارده" : "Start today", style: "destructive", onPress: () => void begin(true) },
-          ],
-        );
+        setConflict(caught.activeSession);
         return;
       }
-      Alert.alert(t("common.error"), friendlyError(caught));
+      setToast(friendlyError(caught));
+      setTimeout(() => setToast(null), 3000);
     } finally { setStarting(false); }
   }
 
@@ -140,6 +137,17 @@ export default function HomeScreen() {
       <WeekStrip days={schedule} />
 
       {error ? <Card muted elevated={false}><AppText variant="small" color="warning">{error}</AppText></Card> : null}
+
+      <ActionSheet
+        visible={Boolean(conflict)}
+        title={language === "ar" ? "في تمرينة قديمة شغالة" : "Another workout is active"}
+        description={conflict ? (language === "ar" ? `التمرينة المفتوحة بتاريخ ${formatShortDate(conflict.scheduledDate, language)}. اختار تكملها أو تبدأ تمرينة النهارده.` : `The open workout is dated ${formatShortDate(conflict.scheduledDate, language)}. Continue it or start today's workout.`) : undefined}
+        onClose={() => setConflict(null)}
+      >
+        <Button onPress={() => { if (!conflict) return; const id = conflict.id; setConflict(null); router.push(`/workout/${id}`); }}>{language === "ar" ? "كمّل القديمة" : "Continue old workout"}</Button>
+        <Button variant="secondary" loading={starting} onPress={() => { setConflict(null); void begin(true); }}>{language === "ar" ? "ابدأ تمرينة النهارده" : "Start today's workout"}</Button>
+      </ActionSheet>
+      <AppToast visible={Boolean(toast)} message={toast ?? ""} tone="danger" />
     </Screen>
   );
 }

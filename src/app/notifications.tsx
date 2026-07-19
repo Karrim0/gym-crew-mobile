@@ -1,4 +1,5 @@
-import { Alert, Pressable, View } from "react-native";
+import { useState } from "react";
+import { Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
 import { ArrowLeft, BellRing, CheckCheck, ChevronLeft, Trash2 } from "lucide-react-native";
 import { Screen } from "@/components/ui/screen";
@@ -6,6 +7,8 @@ import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { IconButton } from "@/components/ui/icon-button";
 import { Button } from "@/components/ui/button";
+import { ActionSheet } from "@/components/ui/action-sheet";
+import { AppToast } from "@/components/ui/app-toast";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
 import { spacing } from "@/lib/theme/tokens";
@@ -21,6 +24,8 @@ export default function NotificationsScreen() {
   const markAllRead = useNotificationCenterStore((state) => state.markAllRead);
   const clear = useNotificationCenterStore((state) => state.clear);
   const unread = items.filter((item) => !item.readAt).length;
+  const [clearOpen, setClearOpen] = useState(false);
+  const [cleared, setCleared] = useState(false);
 
   function openItem(id: string, route: string | null) {
     markRead(id);
@@ -69,22 +74,16 @@ export default function NotificationsScreen() {
               </Card>
             </Pressable>
           ))}
-          <Button
-            variant="ghost"
-            icon={<Trash2 color={colors.danger} size={18} />}
-            onPress={() => Alert.alert(
-              language === "ar" ? "مسح الإشعارات" : "Clear notifications",
-              language === "ar" ? "تمسح سجل الإشعارات من الجهاز؟" : "Clear notification history from this device?",
-              [
-                { text: t("common.cancel"), style: "cancel" },
-                { text: language === "ar" ? "مسح" : "Clear", style: "destructive", onPress: clear },
-              ],
-            )}
-          >
+          <Button variant="ghost" icon={<Trash2 color={colors.danger} size={18} />} onPress={() => setClearOpen(true)}>
             {language === "ar" ? "امسح السجل" : "Clear history"}
           </Button>
         </View>
       )}
+      <ActionSheet visible={clearOpen} title={language === "ar" ? "مسح سجل الإشعارات؟" : "Clear notification history?"} description={language === "ar" ? "ده هيمسح السجل من الجهاز بس، ومش هيغيّر إعدادات التنبيهات." : "This only clears the local history and does not change notification settings."} onClose={() => setClearOpen(false)}>
+        <Button variant="secondary" onPress={() => setClearOpen(false)}>{t("common.cancel")}</Button>
+        <Button variant="danger" onPress={() => { clear(); setClearOpen(false); setCleared(true); setTimeout(() => setCleared(false), 2400); }}>{language === "ar" ? "مسح السجل" : "Clear history"}</Button>
+      </ActionSheet>
+      <AppToast visible={cleared} message={language === "ar" ? "سجل الإشعارات اتمسح." : "Notification history cleared."} tone="success" />
     </Screen>
   );
 }

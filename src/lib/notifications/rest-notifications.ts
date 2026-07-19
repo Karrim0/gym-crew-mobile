@@ -70,7 +70,7 @@ export async function requestNotificationPermission() {
 export async function scheduleRestComplete(
   seconds: number,
   language: "ar" | "en",
-  options?: { route?: string; soundEnabled?: boolean; hapticsEnabled?: boolean },
+  options?: { route?: string; soundEnabled?: boolean; hapticsEnabled?: boolean; nextLabel?: string | null },
 ) {
   const allowed = await requestNotificationPermission().catch(() => false);
   if (!allowed || seconds < 1) return null;
@@ -78,8 +78,10 @@ export async function scheduleRestComplete(
   const hapticsEnabled = options?.hapticsEnabled !== false;
   return Notifications.scheduleNotificationAsync({
     content: {
-      title: language === "ar" ? "الراحة خلصت" : "Rest complete",
-      body: language === "ar" ? "يلا السِت الجاية." : "Ready for your next set.",
+      title: language === "ar" ? "وقت السِت الجاية" : "Ready for the next set",
+      body: options?.nextLabel
+        ? (language === "ar" ? `${options.nextLabel} جاهزة لما تكون مستعد.` : `${options.nextLabel} is ready when you are.`)
+        : (language === "ar" ? "الراحة الاختيارية خلصت — ارجع وقت ما تكون جاهز." : "Your optional rest is over — return when you are ready."),
       sound: soundEnabled ? "rest_complete.wav" : false,
       data: { route: options?.route ?? "/(tabs)/workout", kind: "rest_complete" },
     },

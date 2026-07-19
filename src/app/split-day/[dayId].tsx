@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronDown, ChevronUp, Minus, Plus, Trash2 } from "lucide-react-native";
 import { Screen } from "@/components/ui/screen";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Pill } from "@/components/ui/pill";
 import { LoadingState, ErrorState } from "@/components/ui/states";
+import { ActionSheet } from "@/components/ui/action-sheet";
+import { AppToast } from "@/components/ui/app-toast";
 import {
   fetchPersonalSplit,
   removeSplitExercise,
@@ -37,6 +39,13 @@ export default function SplitDayScreen() {
   const [focus, setFocus] = useState("");
   const [notes, setNotes] = useState("");
   const [type, setType] = useState<WorkoutType>("custom");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: "success" | "danger" } | null>(null);
+
+  function showToast(message: string, tone: "success" | "danger" = "success") {
+    setToast({ message, tone });
+    setTimeout(() => setToast(null), 2800);
+  }
 
   const load = useCallback(async () => {
     if (!user || !dayId) return;
@@ -74,9 +83,9 @@ export default function SplitDayScreen() {
         dayNotes: notes,
       });
       await load();
-      Alert.alert(t("common.done"), language === "ar" ? "اليوم اتحدّث." : "Day updated.");
+      showToast(language === "ar" ? "اليوم اتحدّث." : "Day updated.");
     } catch (caught) {
-      Alert.alert(t("common.error"), friendlyError(caught));
+      showToast(friendlyError(caught), "danger");
     } finally {
       setSaving(false);
     }
@@ -87,7 +96,7 @@ export default function SplitDayScreen() {
       await updateSplitExerciseTargets(exerciseId, Math.max(1, sets), Math.max(1, min), Math.max(Math.max(1, min), max));
       await load();
     } catch (caught) {
-      Alert.alert(t("common.error"), friendlyError(caught));
+      showToast(friendlyError(caught), "danger");
     }
   }
 
@@ -101,7 +110,19 @@ export default function SplitDayScreen() {
       await reorderSplitExercises(day.id, ids);
       await load();
     } catch (caught) {
-      Alert.alert(t("common.error"), friendlyError(caught));
+      showToast(friendlyError(caught), "danger");
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    try {
+      await removeSplitExercise(deleteTarget.id);
+      setDeleteTarget(null);
+      await load();
+      showToast(language === "ar" ? "التمرين اتمسح من اليوم." : "Exercise removed from this day.");
+    } catch (caught) {
+      showToast(friendlyError(caught), "danger");
     }
   }
 
@@ -150,10 +171,7 @@ export default function SplitDayScreen() {
                   <View style={{ flexDirection: rowDirection, gap: 4 }}>
                     <Pressable onPress={() => void move(index, -1)} disabled={index === 0} style={{ padding: 9, opacity: index === 0 ? 0.3 : 1 }}><ChevronUp color={colors.text} size={20} /></Pressable>
                     <Pressable onPress={() => void move(index, 1)} disabled={index === day.exercises.length - 1} style={{ padding: 9, opacity: index === day.exercises.length - 1 ? 0.3 : 1 }}><ChevronDown color={colors.text} size={20} /></Pressable>
-                    <Pressable onPress={() => Alert.alert(t("common.delete"), item.exercise.name, [
-                      { text: t("common.cancel"), style: "cancel" },
-                      { text: t("common.delete"), style: "destructive", onPress: () => void removeSplitExercise(item.id).then(load) },
-                    ])} style={{ padding: 9 }}><Trash2 color={colors.danger} size={20} /></Pressable>
+                    <Pressable onPress={() => setDeleteTarget({ id: item.id, name: item.exercise.name })} style={{ padding: 9 }}><Trash2 color={colors.danger} size={20} /></Pressable>
                   </View>
                 </View>
 
@@ -178,6 +196,12 @@ export default function SplitDayScreen() {
           </View>
         </>
       ) : null}
+
+      <ActionSheet visible={Boolean(deleteTarget)} title={language === "ar" ? "تحذف التمرين من اليوم؟" : "Remove exercise from this day?"} description={deleteTarget?.name} onClose={() => setDeleteTarget(null)}>
+        <Button variant="secondary" onPress={() => setDeleteTarget(null)}>{t("common.cancel")}</Button>
+        <Button variant="danger" onPress={() => void confirmDelete()}>{t("common.delete")}</Button>
+      </ActionSheet>
+      <AppToast visible={Boolean(toast)} message={toast?.message ?? ""} tone={toast?.tone} />
     </Screen>
   );
 }
