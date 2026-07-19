@@ -1,322 +1,157 @@
-# Gym Crew Mobile v0.2.0 — تطبيق الـFinal Patch واختباره
+# Gym Crew Mobile v0.5.0 — Apply & Test
 
-> هذه النسخة تجمع Profile + Navigation + UI/UX + Workout + Crew + Notifications + Offline + QA في Patch واحد.
-> الشغل كله على فرع `develop`. لا تطبق الـPatch على `main` مباشرة.
+النسخة دي **Rescue Overlay كامل** مبني على فولدر المشروع اللي تم رفعه، وليس Patch جزئي فوق نسخة متوقعة. السكربت يستبدل ملفات التطبيق الأساسية بالكامل ويُبقي `.git` و`.env.local` و`node_modules` كما هي.
 
-## 0) قبل البداية
+## قبل التطبيق
 
-اقفل Metro باستخدام `Ctrl + C`، ثم افتح **CMD جديد**.
+- اقفل Metro بـ `Ctrl + C`.
+- لا تشغّل `prebuild` أو `npm audit fix --force`.
+- ضع `gym-crew-mobile-v0.5.0-rescue-patch.zip` داخل Downloads.
 
-تأكد أن ملف الـZIP موجود في Downloads بالاسم:
-
-```text
-gym-crew-mobile-v0.2.0-final-patch.zip
-```
-
-## 1) جهّز المشروع والفرع
-
-نفّذ في CMD:
+## 1) نسخة أمان محلية
 
 ```bat
 set "PROJECT=E:\A-KAREEM-TECH\MobileApps\gym-crew-mobile"
-set "PATCHZIP=%USERPROFILE%\Downloads\gym-crew-mobile-v0.2.0-final-patch.zip"
-set "PATCHDIR=%TEMP%\gym-crew-mobile-v0.2.0-final-patch"
+set "BACKUP=E:\A-KAREEM-TECH\MobileApps\gym-crew-mobile-backup-before-v050"
 
-cd /d "%PROJECT%"
-git checkout develop
-git status
-git branch --show-current
+if exist "%BACKUP%" rmdir /s /q "%BACKUP%"
+robocopy "%PROJECT%" "%BACKUP%" /E /XD node_modules .expo .git dist /R:2 /W:1
 ```
 
-المطلوب أن يظهر الفرع:
+النسخة الاحتياطية تشمل `.env.local`. لا ترفعها أو تشاركها.
 
-```text
-develop
-```
-
-قبل أي `git add -A` راجع أن `git status` **لا يعرض**:
-
-```text
-.env.local
-node_modules
-.expo
-android\build
-```
-
-لو عندك تعديلات سابقة سليمة ولم تُرفع بعد:
+## 2) فك وتطبيق Rescue Overlay
 
 ```bat
-git add -A
-git commit -m "fix: stabilize mobile core before v0.2.0"
-git push origin develop
-```
+set "PATCHZIP=%USERPROFILE%\Downloads\gym-crew-mobile-v0.5.0-rescue-patch.zip"
+set "PATCHDIR=%TEMP%\gym-crew-mobile-v0.5.0-rescue-patch"
 
-ثم:
-
-```bat
-git pull origin develop
-git branch backup/pre-mobile-v0.2.0
-```
-
-## 2) فك الـPatch وطبّقه
-
-```bat
 if exist "%PATCHDIR%" rmdir /s /q "%PATCHDIR%"
 powershell -NoProfile -Command "Expand-Archive -LiteralPath '%PATCHZIP%' -DestinationPath '%PATCHDIR%' -Force"
+
+dir "%PATCHDIR%\APPLY_PATCH.cmd"
+dir "%PATCHDIR%\SQL_TO_RUN_IN_SUPABASE.sql"
+
 call "%PATCHDIR%\APPLY_PATCH.cmd" "%PROJECT%"
 ```
 
-المفروض يظهر:
+المتوقع:
 
 ```text
-Patch files copied successfully.
+[OK] Rescue files copied successfully.
+[OK] .git, .env.local and node_modules were preserved.
 ```
 
-راجع الملفات:
+## 3) تأكد من النسخة
 
 ```bat
 cd /d "%PROJECT%"
-git status --short
+node -p "require('./package.json').version"
+findstr /C:"version: "0.5.0"" app.config.js
+findstr /C:"versionCode: 5" app.config.js
 ```
 
-## 3) ثبّت النسخ المقفولة من الحزم
+المتوقع أن يظهر `0.5.0` و`versionCode: 5`.
 
-```bat
-cd /d "%PROJECT%"
-npm ci
-```
+## 4) طبّق SQL على Supabase
 
-لا تستخدم:
-
-```bat
-npm audit fix --force
-```
-
-لأنه قد يغيّر نسخ Expo/React Native إلى نسخ غير متوافقة.
-
-## 4) طبّق Supabase SQL
-
-في **CMD فقط** نفّذ:
+من CMD:
 
 ```bat
 type "%PATCHDIR%\SQL_TO_RUN_IN_SUPABASE.sql" | clip
 ```
 
-بعدها افتح:
+ثم داخل Supabase:
 
 ```text
-Supabase Dashboard
-→ مشروع Gym Crew
-→ SQL Editor
-→ New query
+SQL Editor → New query → Ctrl + V → Run
 ```
 
-داخل SQL Editor:
-
-```text
-Ctrl + A
-Delete
-Ctrl + V
-Run
-```
-
-المطلوب:
+المتوقع:
 
 ```text
 Success. No rows returned
 ```
 
-الـSQL يقوم بـ:
+الملف idempotent ويحتوي إصلاح الجروب، Avatar Storage، Gym Mode metadata، Girls 4-Day Split، وإعادة بناء الأسبوع بتوقيت القاهرة. لا يعطّل RLS.
 
-- إصلاح `column reference user_id is ambiguous`.
-- حماية إحصائيات أعضاء الجروب حسب إعدادات الخصوصية.
-- إنشاء Bucket باسم `avatars`.
-- إضافة سياسات Storage آمنة لكل مستخدم داخل مجلده فقط.
-- لا يعطّل RLS.
+## 5) الفحص الكامل
 
-لو ظهر أي SQL Error، لا تشغّل SQL عشوائيًا. احتفظ بصورة الخطأ والنص كاملًا.
+```bat
+call "%PATCHDIR%\VERIFY_PATCH.cmd" "%PROJECT%"
+```
 
-## 5) شغّل فحوصات الكود
+أو يدويًا:
 
 ```bat
 cd /d "%PROJECT%"
-npm run typecheck
-npm run lint
+npm ci
+npm run check
 npx expo install --check
 npx expo config --type public
 ```
 
-أو دفعة واحدة:
+لا تشغّل:
 
 ```bat
-npm run qa
+npm audit fix --force
 ```
 
-النتيجة المطلوبة:
-
-```text
-TypeScript: passed
-ESLint: passed
-Dependencies are up to date
-```
-
-## 6) فحص Prebuild
-
-الأمر التالي لا يحتاج Emulator، لكنه سيعيد إنشاء مجلد Android من إعدادات Expo الحالية:
+## 6) تشغيل Development Build
 
 ```bat
 cd /d "%PROJECT%"
-npx expo prebuild --platform android --clean --no-install
+npx expo start --dev-client --lan --clear
 ```
 
-النتيجة المطلوبة:
+الموبايل والكمبيوتر على نفس Wi‑Fi. الـDevelopment Build الحالي يكفي لأنه لا توجد Native Dependency جديدة.
 
-```text
-Created native directory
-Finished prebuild
-```
+## 7) سيناريو الاختبار الوظيفي
 
-لا تشغّل `expo run:android` عندك حاليًا لأن Android Studio وAndroid SDK غير مثبتين. الـDevelopment Build المثبت على الموبايل يكفي للاختبار عن طريق Metro.
+### أونلاين مرة واحدة
 
-## 7) شغّل التطبيق
+افتح: Home، Split، Workout، Progress، Profile، Crew، History. بعدها طبّق **Girls 4-Day Strength** وتأكد من ظهور 4 أيام و25 تمرينًا.
+
+### Gym Mode
+
+- اضغط بدء تمرينة اليوم.
+- اختبر سؤال الترتيب الخفيف.
+- تأكد أن أول تمرين يظهر في شاشة واحدة.
+- عدّل الوزن والعدات بالضغط، وسجل السِت.
+- اختبر: السِت التالية، التمرين التالي، سِت زيادة، Undo، Notes، ترتيب الجلسة، إنهاء التمرينة.
+- اضغط زر التسجيل مرتين بسرعة وتأكد أنه لا يسجل Duplicate.
+
+### Offline
+
+- بعد الـwarm-up فعّل Airplane Mode.
+- اقفل التطبيق وافتحه من الأيقونة.
+- افتح Home وSplit وWorkout وProgress وProfile وHistory.
+- ابدأ تمرينة، سجل Sets وNotes، اقفل التطبيق وافتحه، ثم أكمل وأنهِ.
+- رجّع الإنترنت وافتح Settings؛ يجب أن يقل Pending Sync حتى يصل للصفر بدون Sets مكررة.
+
+### Light/Dark/Small screens
+
+اختبر Light وDark والعربي والإنجليزي، وراجع عدم خروج الأزرار أو مدخلات Gym Mode خارج الشاشة.
+
+## 8) Git بعد نجاح الاختبار
 
 ```bat
 cd /d "%PROJECT%"
-npm run dev
+git checkout develop
+git status
+git add -A
+git commit -m "feat: rescue offline flow and advanced gym experience v0.5.0"
+git push origin develop
 ```
 
-لو البورت `8081` مستخدم، اختر `Y` لتشغيل `8082`، أو اقفل نافذة Metro القديمة أولًا.
+بعد اختبار الـAPK فقط، ادمج `develop` إلى `main` وأنشئ Tag.
 
-بعد ظهور QR:
-
-1. الكمبيوتر والموبايل على نفس Wi-Fi.
-2. افتح تطبيق Gym Crew Development Build.
-3. امسح QR.
-4. اترك Metro مفتوحًا أثناء الاختبار.
-
-## 8) سيناريو الاختبار الإجباري
-
-### A. الحساب والتنقل
-
-- التطبيق لا يحوّلك مؤقتًا إلى Onboarding أثناء تحميل الحساب.
-- صورة الحساب تفتح Profile.
-- زر Settings مستقل.
-- زر الجرس يفتح Notification Center.
-- Bottom Tabs لا تتداخل مع شريط النظام.
-
-### B. Profile
-
-- غيّر الاسم واحفظه.
-- ارفع JPG/PNG/WebP أقل من 5MB.
-- اقفل وافتح الشاشة وتأكد أن الصورة والاسم محفوظان.
-- غيّر خيارات الخصوصية وتأكد أن الجروب يخفي الأرقام المقفولة عن بقية الأعضاء.
-
-### C. Crew
-
-- افتح شاشة الجروب.
-- لا يظهر `user_id is ambiguous`.
-- كود الدعوة يُنسخ.
-- الصور والأدوار والترتيب تظهر.
-- العضو الذي قفل ملخصه يظهر كـPrivate بدل كشف أرقامه.
-
-### D. تمرينة اليوم
-
-- تأكد أن اليوم في Home هو اليوم الفعلي بتوقيت الجهاز.
-- ابدأ تمرينة اليوم.
-- لو فيه Session قديمة، يجب أن يظهر اختيار: تكمل القديمة أو تلغيها وتبدأ اليوم.
-- لا يبدأ التطبيق أول يوم في الـSplit بدل اليوم الحالي.
-
-### E. Workout
-
-- اختر تمرينًا وسجّل وزنًا وعدات.
-- أضف Set جديدة.
-- أضف Exercise أثناء الجلسة.
-- اكتب Exercise Notes.
-- بدّل ترتيب التمارين.
-- أنهِ التمرينة وافتح تفاصيلها من History.
-- جرّب إدخال قيم غير صحيحة وتأكد أن التطبيق يرفضها برسالة مفهومة.
-
-### F. Rest Timer والإشعارات
-
-- جرّب 60/90/120 ثانية.
-- جرّب Pause وResume و±15 ثانية.
-- جرّب Sound On/Off وVibration On/Off.
-- اضغط Test Notification من Settings.
-- ضع التطبيق في الخلفية وانتظر التنبيه.
-- اضغط التنبيه وتأكد أنه يفتح الشاشة الصحيحة.
-- تأكد أن الإشعار يظهر في Notification Center والـbadge يختفي بعد قراءته.
-
-### G. Offline الحقيقي
-
-1. افتح Home وSplit وWorkout مرة واحدة والإنترنت شغال حتى تُحفظ البيانات في SQLite.
-2. فعّل Airplane Mode.
-3. افتح التطبيق.
-4. ابدأ تمرينة من الـCached Schedule.
-5. سجّل Sets وأضف Set وأكمل التمرينة.
-6. اقفل التطبيق وافتحه والإنترنت ما زال مقفولًا.
-7. تأكد أن البيانات لم تختفِ وأن Banner يوضح Pending Sync.
-8. أعد الإنترنت.
-9. اضغط Sync Now أو انتظر المزامنة التلقائية.
-10. تأكد أن Pending وصل إلى 0 ولا توجد Sessions أو Sets مكررة.
-
-### H. UI/UX
-
-- جرّب Arabic وEnglish.
-- جرّب Light وDark وSystem.
-- افتح الكيبورد في الشاشات التي تحتوي Forms.
-- جرّب جهازًا صغير الشاشة أو كبّر حجم الخط من إعدادات Android.
-- لا يوجد زر ظاهر يعرض Coming Soon أو لا يعمل.
-
-## 9) أنشئ Preview APK بعد نجاح الاختبارات
-
-الـPreview Build لا يحتاج Metro أو Android SDK محليًا:
+## 9) Preview APK مستقل
 
 ```bat
-cd /d "%PROJECT%"
 npx eas-cli@latest project:info
 npx eas-cli@latest env:list --environment development
 npx eas-cli@latest build --platform android --profile preview --clear-cache
 ```
 
-نزّل الـAPK الناتج وثبّته كتطبيق مستقل، ثم كرر أهم اختبارات Profile/Crew/Workout/Notifications/Offline بدون تشغيل Metro.
-
-## 10) Commit وPush
-
-بعد نجاح الاختبارات:
-
-```bat
-cd /d "%PROJECT%"
-git status
-git add -A
-git commit -m "feat: complete Gym Crew mobile v0.2.0 experience"
-git push origin develop
-```
-
-بعد نجاح Preview APK فقط:
-
-```bat
-git checkout main
-git pull origin main
-git merge --no-ff develop
-git push origin main
-git tag -a mobile-beta-0.2.0 -m "Gym Crew Mobile beta 0.2.0"
-git push origin mobile-beta-0.2.0
-git checkout develop
-```
-
-## 11) الرجوع للنسخة السابقة
-
-لو لم تعمل Commit بعد وتريد الرجوع للنقطة التي سبقت الـPatch:
-
-```bat
-cd /d "%PROJECT%"
-git reset --hard backup/pre-mobile-v0.2.0
-```
-
-لو عملت Commit للـPatch ورفعته، استخدم `git revert` بدل حذف التاريخ:
-
-```bat
-git log --oneline -5
-git revert <PATCH_COMMIT_HASH>
-git push origin develop
-```
+لا تحتاج Android SDK محليًا لأن EAS Cloud ينفذ البناء.
