@@ -1,0 +1,102 @@
+{
+  "version": {
+    "package": "0.5.0",
+    "expo": "0.5.0",
+    "android": "0.5.0",
+    "versionCode": 5
+  },
+  "inventory": {
+    "sourceFiles": 79,
+    "migrations": 5,
+    "typedTables": 12,
+    "typedFunctions": 34,
+    "tests": 0
+  },
+  "findings": [
+    {
+      "severity": "info",
+      "code": "VERSION_ALIGNED",
+      "message": "Version is aligned at 0.5.0 / versionCode 5.",
+      "evidence": []
+    },
+    {
+      "severity": "error",
+      "code": "HANDOFF_ARTIFACTS",
+      "message": "Local/packaging artifacts are present.",
+      "evidence": [
+        ".env.local"
+      ]
+    },
+    {
+      "severity": "error",
+      "code": "ANDROID_NETWORK_PERMISSION",
+      "message": "android.permission.ACCESS_NETWORK_STATE is missing from the committed Android manifest.",
+      "evidence": [
+        "android/app/src/main/AndroidManifest.xml"
+      ]
+    },
+    {
+      "severity": "error",
+      "code": "ANDROID_NETWORK_PERMISSION",
+      "message": "android.permission.ACCESS_WIFI_STATE is missing from the committed Android manifest.",
+      "evidence": [
+        "android/app/src/main/AndroidManifest.xml"
+      ]
+    },
+    {
+      "severity": "error",
+      "code": "NETWORK_UNKNOWN_AS_OFFLINE",
+      "message": "A native network exception is converted into confirmed offline state.",
+      "evidence": [
+        "src/lib/offline/network.ts"
+      ]
+    },
+    {
+      "severity": "error",
+      "code": "FULL_APP_CONTEXT_BLOCKER",
+      "message": "The root layout can replace the complete app when context refresh is unavailable.",
+      "evidence": [
+        "src/app/_layout.tsx"
+      ]
+    },
+    {
+      "severity": "warning",
+      "code": "DEBUG_RELEASE_SIGNING",
+      "message": "The committed local release variant uses the debug signing config.",
+      "evidence": [
+        "android/app/build.gradle"
+      ]
+    },
+    {
+      "severity": "error",
+      "code": "DATABASE_NOT_REPRODUCIBLE",
+      "message": "Generated database types contain tables, but repository migrations do not create a base table schema.",
+      "evidence": [
+        "12 typed tables",
+        "5 incremental migrations",
+        "0 CREATE TABLE statements"
+      ]
+    },
+    {
+      "severity": "warning",
+      "code": "LARGE_ROUTE_COMPONENTS",
+      "message": "Large source files should be decomposed before UI migration.",
+      "evidence": [
+        "src/lib/supabase/database.types.ts: 1029 lines",
+        "src/app/workout/[sessionId].tsx: 544 lines",
+        "src/features/workouts/workout-service.ts: 505 lines"
+      ]
+    },
+    {
+      "severity": "warning",
+      "code": "NO_AUTOMATED_TESTS",
+      "message": "No TypeScript test/spec files were found.",
+      "evidence": []
+    }
+  ],
+  "summary": {
+    "info": 1,
+    "error": 6,
+    "warning": 3
+  }
+}

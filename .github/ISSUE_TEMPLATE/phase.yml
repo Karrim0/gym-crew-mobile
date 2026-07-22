@@ -1,0 +1,39 @@
+name: Project phase
+description: Track one controlled Gym Crew recovery or feature phase.
+title: "[Phase X] "
+labels: []
+assignees: []
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One measurable goal for this phase.
+    validations:
+      required: true
+  - type: textarea
+    id: in-scope
+    attributes:
+      label: In scope
+      description: Work allowed in this phase.
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: Changes that must wait for another phase.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Tests and observable behavior required before merge.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Emulator screenshots, logs, SQL assertions, or QA notes.

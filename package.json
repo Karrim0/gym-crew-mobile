@@ -68,7 +68,9 @@
     "export": "expo export --platform web",
     "dev": "expo start --dev-client --lan --clear",
     "qa": "npm run check && expo install --check",
-    "bundle:android": "expo export --platform android --output-dir dist/android"
+    "bundle:android": "expo export --platform android --output-dir dist/android",
+    "audit:baseline": "node scripts/phase0-audit.mjs",
+    "verify:phase0": "node scripts/verify-phase0.mjs"
   },
   "private": true
 }
