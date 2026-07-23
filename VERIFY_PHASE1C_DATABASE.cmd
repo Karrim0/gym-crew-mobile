@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0
 
 echo [1/4] Verify Phase 1C recovery artifacts
 node scripts\verify-phase1c-recovery.mjs
@@ -15,7 +15,10 @@ call npm run lint
 if errorlevel 1 exit /b 1
 
 echo [4/4] Expo dependency alignment
-set CI=1`r`ncall npx expo install --check`r`nif errorlevel 1 echo [WARNING] Expo dependency alignment is deferred to the application stability phase.`r`nset CI=
+set CI=1
+call npx expo install --check
+if errorlevel 1 echo [WARNING] Expo dependency alignment is deferred to the application stability phase.
+set CI=
 
 echo.
 echo [OK] Phase 1C local verification passed.
