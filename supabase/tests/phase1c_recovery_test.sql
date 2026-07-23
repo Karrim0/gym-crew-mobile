@@ -50,8 +50,8 @@ select is(
    join pg_class c on c.oid = t.tgrelid
    join pg_namespace n on n.oid = c.relnamespace
    where not t.tgisinternal and n.nspname = 'public'),
-  25,
-  'public tables contain 25 custom triggers'
+  26,
+  'public tables contain 26 custom triggers'
 );
 
 select ok(

@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0
+cd /d "%~dp0"
 
 echo [1/4] Verify Phase 1C recovery artifacts
 node scripts\verify-phase1c-recovery.mjs
