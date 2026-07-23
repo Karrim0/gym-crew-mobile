@@ -10,6 +10,7 @@ on:
       - "supabase/migrations/**"
       - "src/lib/supabase/database.types.ts"
       - "scripts/verify-phase1c-recovery.mjs"
+      - "scripts/compare-phase1c-types.mjs"
       - ".github/workflows/phase1c-reproducible-db.yml"
   workflow_dispatch:
 
@@ -70,7 +71,7 @@ jobs:
 
       - name: Compare regenerated types with production types
         shell: bash
-        run: diff --ignore-space-at-eol -u src/lib/supabase/database.types.ts .phase1c/database.types.local.ts
+        run: node scripts/compare-phase1c-types.mjs
 
       - name: Dump rebuilt public schema
         working-directory: .phase1c
