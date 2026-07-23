@@ -1,17 +1,6 @@
 name: Phase 1C Reproducible Database
 
 on:
-  push:
-    branches:
-      - phase/1-database-source-of-truth
-    paths:
-      - "supabase/recovery/**"
-      - "supabase/tests/phase1c_recovery_test.sql"
-      - "supabase/migrations/**"
-      - "src/lib/supabase/database.types.ts"
-      - "scripts/verify-phase1c-recovery.mjs"
-      - "scripts/compare-phase1c-types.mjs"
-      - ".github/workflows/phase1c-reproducible-db.yml"
   workflow_dispatch:
 
 permissions:
