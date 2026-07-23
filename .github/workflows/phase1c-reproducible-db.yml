@@ -1,0 +1,95 @@
+name: Phase 1C Reproducible Database
+
+on:
+  push:
+    branches:
+      - phase/1-database-source-of-truth
+    paths:
+      - "supabase/recovery/**"
+      - "supabase/tests/phase1c_recovery_test.sql"
+      - "supabase/migrations/**"
+      - "src/lib/supabase/database.types.ts"
+      - "scripts/verify-phase1c-recovery.mjs"
+      - ".github/workflows/phase1c-reproducible-db.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cold-rebuild:
+    name: Cold rebuild recovery database
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: latest
+          github-token: ${{ github.token }}
+
+      - name: Verify committed recovery artifacts
+        run: node scripts/verify-phase1c-recovery.mjs
+
+      - name: Create isolated Supabase project
+        shell: bash
+        run: |
+          rm -rf .phase1c
+          mkdir -p .phase1c
+          cd .phase1c
+          supabase init
+
+          mkdir -p supabase/migrations supabase/tests
+          cp ../supabase/recovery/20260723_remote_public_baseline.sql \
+            supabase/migrations/00000000000001_remote_public_baseline.sql
+          cp ../supabase/recovery/20260723_auth_storage_baseline.sql \
+            supabase/migrations/00000000000002_auth_storage_baseline.sql
+
+          for migration in ../supabase/migrations/*.sql; do
+            cp "$migration" "supabase/migrations/$(basename "$migration")"
+          done
+
+          cp ../supabase/recovery/20260723_exercise_catalog_seed.sql supabase/seed.sql
+          cp ../supabase/tests/phase1c_recovery_test.sql supabase/tests/phase1c_recovery_test.sql
+
+      - name: Start fresh local database and replay migrations
+        working-directory: .phase1c
+        run: supabase db start
+
+      - name: Run database recovery tests
+        working-directory: .phase1c
+        run: supabase test db
+
+      - name: Generate local database types
+        working-directory: .phase1c
+        run: supabase gen types typescript --local --schema public > database.types.local.ts
+
+      - name: Compare regenerated types with production types
+        shell: bash
+        run: diff --ignore-space-at-eol -u src/lib/supabase/database.types.ts .phase1c/database.types.local.ts
+
+      - name: Dump rebuilt public schema
+        working-directory: .phase1c
+        run: |
+          mkdir -p artifacts
+          supabase db dump --local --schema public -f artifacts/rebuilt_public_schema.sql
+          cp database.types.local.ts artifacts/
+          cp supabase/tests/phase1c_recovery_test.sql artifacts/
+          sha256sum artifacts/* > artifacts/SHA256SUMS.txt
+
+      - name: Upload cold-rebuild evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gym-crew-phase1c-cold-rebuild
+          path: .phase1c/artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop local Supabase
+        if: always()
+        working-directory: .phase1c
+        run: supabase stop --no-backup || true
