@@ -51,3 +51,4 @@ VERIFY_PATCH.cmd
 SQL_TO_RUN_IN_SUPABASE.sql
 FILES_CHANGED.txt
 *_PATCH*
+supabase/.temp/
