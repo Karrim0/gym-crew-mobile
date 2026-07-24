@@ -25,6 +25,12 @@ const config = {
       monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
     predictiveBackGestureEnabled: true,
+    permissions: [
+      "android.permission.INTERNET",
+      "android.permission.ACCESS_NETWORK_STATE",
+      "android.permission.ACCESS_WIFI_STATE",
+      "android.permission.VIBRATE",
+    ],
   },
   web: {
     bundler: "metro",
@@ -34,6 +40,7 @@ const config = {
   plugins: [
     "expo-router",
     "expo-asset",
+    "expo-web-browser",
     [
       "expo-splash-screen",
       {

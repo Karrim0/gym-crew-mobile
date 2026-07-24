@@ -1,12 +1,18 @@
-import * as Network from "expo-network";
 import { create } from "zustand";
+import * as Network from "expo-network";
 import { flushSyncQueue, pendingSyncCount } from "@/lib/offline/sync";
 import { subscribeSyncEvents } from "@/lib/offline/sync-events";
+import {
+  getNetworkSnapshot,
+  networkSnapshotFromState,
+  type NetworkAvailability,
+} from "@/lib/offline/network";
 
 interface ConnectivityState {
   initialized: boolean;
-  isConnected: boolean;
-  isInternetReachable: boolean;
+  networkStatus: NetworkAvailability;
+  isConnected: boolean | null;
+  isInternetReachable: boolean | null;
   pending: number;
   syncing: boolean;
   lastError: string | null;
@@ -16,32 +22,38 @@ interface ConnectivityState {
   initialize: () => Promise<() => void>;
 }
 
+async function safePendingCount(fallback = 0) {
+  return pendingSyncCount().catch(() => fallback);
+}
+
 export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
   initialized: false,
-  isConnected: true,
-  isInternetReachable: true,
+  networkStatus: "unknown",
+  isConnected: null,
+  isInternetReachable: null,
   pending: 0,
   syncing: false,
   lastError: null,
   lastSyncedAt: null,
 
   refresh: async () => {
-    const pending = await pendingSyncCount().catch(() => 0);
-    try {
-      const network = await Network.getNetworkStateAsync();
-      set({
-        initialized: true,
-        isConnected: network.isConnected !== false,
-        isInternetReachable: network.isInternetReachable !== false,
-        pending,
-      });
-    } catch {
-      set({ initialized: true, isConnected: false, isInternetReachable: false, pending });
-    }
+    const [pending, network] = await Promise.all([
+      safePendingCount(get().pending),
+      getNetworkSnapshot(),
+    ]);
+
+    set({
+      initialized: true,
+      networkStatus: network.status,
+      isConnected: network.isConnected,
+      isInternetReachable: network.isInternetReachable,
+      pending,
+    });
   },
 
   syncNow: async () => {
-    if (get().syncing) return;
+    if (get().syncing || get().networkStatus === "offline") return;
+
     set({ syncing: true, lastError: null });
     try {
       const result = await flushSyncQueue();
@@ -49,12 +61,15 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
         syncing: false,
         pending: result.pending,
         lastError: result.lastError,
-        lastSyncedAt: !result.lastError && !result.skipped ? new Date().toISOString() : get().lastSyncedAt,
+        lastSyncedAt:
+          !result.lastError && !result.skipped
+            ? new Date().toISOString()
+            : get().lastSyncedAt,
       });
     } catch (caught) {
       set({
         syncing: false,
-        pending: await pendingSyncCount().catch(() => get().pending),
+        pending: await safePendingCount(get().pending),
         lastError: caught instanceof Error ? caught.message : String(caught),
       });
     }
@@ -62,22 +77,42 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
 
   initialize: async () => {
     await get().refresh();
+
     let networkSubscription: { remove: () => void } | null = null;
     try {
-      networkSubscription = Network.addNetworkStateListener((network) => {
-        const online = network.isConnected !== false && network.isInternetReachable !== false;
-        set({ isConnected: network.isConnected !== false, isInternetReachable: network.isInternetReachable !== false });
-        if (online) void get().syncNow();
+      networkSubscription = Network.addNetworkStateListener((state) => {
+        const network = networkSnapshotFromState(state);
+        set({
+          initialized: true,
+          networkStatus: network.status,
+          isConnected: network.isConnected,
+          isInternetReachable: network.isInternetReachable,
+        });
+
+        if (network.status === "online") {
+          void get().syncNow();
+        }
       });
     } catch {
-      // The rest of the app must remain usable even if the native listener fails.
+      // Keep the status unknown. The app and local workspace remain usable.
+      set({
+        initialized: true,
+        networkStatus: "unknown",
+        isConnected: null,
+        isInternetReachable: null,
+      });
     }
-    const unsubscribeSync = subscribeSyncEvents((snapshot) => set((state) => ({
-      syncing: snapshot.syncing ?? state.syncing,
-      pending: snapshot.pending ?? state.pending,
-      lastError: snapshot.lastError === undefined ? state.lastError : snapshot.lastError,
-      lastSyncedAt: snapshot.lastSyncedAt ?? state.lastSyncedAt,
-    })));
+
+    const unsubscribeSync = subscribeSyncEvents((snapshot) =>
+      set((state) => ({
+        syncing: snapshot.syncing ?? state.syncing,
+        pending: snapshot.pending ?? state.pending,
+        lastError:
+          snapshot.lastError === undefined ? state.lastError : snapshot.lastError,
+        lastSyncedAt: snapshot.lastSyncedAt ?? state.lastSyncedAt,
+      })),
+    );
+
     return () => {
       networkSubscription?.remove();
       unsubscribeSync();
