@@ -1,0 +1,93 @@
+name: Phase 1D Active Migration Chain
+
+on:
+  push:
+    branches:
+      - phase/1-database-source-of-truth
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/seed.sql"
+      - "supabase/tests/phase1d_active_chain_test.sql"
+      - "src/lib/supabase/database.types.ts"
+      - "scripts/verify-phase1d-migration-chain.mjs"
+      - "scripts/compare-phase1d-types.mjs"
+      - ".github/workflows/phase1d-active-migration-chain.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild-active-chain:
+    name: Rebuild active migration chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: latest
+          github-token: ${{ github.token }}
+
+      - name: Verify active migration-chain files
+        run: node scripts/verify-phase1d-migration-chain.mjs
+
+      - name: Create isolated Supabase project
+        shell: bash
+        run: |
+          rm -rf .phase1d
+          mkdir -p .phase1d
+          cd .phase1d
+          supabase init
+
+          rm -rf supabase/migrations
+          mkdir -p supabase/migrations supabase/tests
+          cp ../supabase/migrations/*.sql supabase/migrations/
+          cp ../supabase/seed.sql supabase/seed.sql
+          cp ../supabase/tests/phase1d_active_chain_test.sql \
+            supabase/tests/phase1d_active_chain_test.sql
+
+      - name: Start fresh database from active migrations
+        working-directory: .phase1d
+        run: supabase db start
+
+      - name: Run active-chain database tests
+        working-directory: .phase1d
+        run: supabase test db
+
+      - name: Generate database types
+        working-directory: .phase1d
+        run: supabase gen types typescript --local --schema public > database.types.local.ts
+
+      - name: Compare active-chain contract with production
+        run: node scripts/compare-phase1d-types.mjs
+
+      - name: Capture active-chain evidence
+        working-directory: .phase1d
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          supabase db dump --local --schema public \
+            -f artifacts/rebuilt_public_schema.sql
+          supabase migration list --local \
+            > artifacts/local_migration_list.txt
+          cp database.types.local.ts artifacts/
+          cp supabase/tests/phase1d_active_chain_test.sql artifacts/
+          sha256sum artifacts/* > artifacts/SHA256SUMS.txt
+
+      - name: Upload active-chain evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gym-crew-phase1d-active-migration-chain
+          path: .phase1d/artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop local Supabase
+        if: always()
+        working-directory: .phase1d
+        run: supabase stop --no-backup || true

@@ -1,0 +1,8 @@
+-- Gym Crew recovered migration-history marker.
+-- Remote migration: 202607150008_flexible_schedule_and_workout_safety
+--
+-- The original SQL was not present in the repository when recovery began.
+-- Its final schema effects are already folded into:
+--   202607140001_initial_schema.sql
+--
+-- This intentionally contains no executable SQL. Keep the timestamp unchanged.
