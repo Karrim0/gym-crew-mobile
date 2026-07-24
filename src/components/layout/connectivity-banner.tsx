@@ -1,5 +1,6 @@
 import { Pressable, View } from "react-native";
 import {
+  ShieldAlert,
   CircleHelp,
   CloudOff,
   RefreshCw,
@@ -15,48 +16,75 @@ export function ConnectivityBanner() {
   const { language, rowDirection } = useTranslation();
   const networkStatus = useConnectivityStore((state) => state.networkStatus);
   const pending = useConnectivityStore((state) => state.pending);
+  const failed = useConnectivityStore((state) => state.failed);
   const syncing = useConnectivityStore((state) => state.syncing);
   const syncNow = useConnectivityStore((state) => state.syncNow);
+  const retryFailed = useConnectivityStore((state) => state.retryFailed);
 
-  if (networkStatus === "online" && pending === 0 && !syncing) return null;
+  if (
+    networkStatus === "online" &&
+    pending === 0 &&
+    failed === 0 &&
+    !syncing
+  ) {
+    return null;
+  }
 
   const offline = networkStatus === "offline";
   const unknown = networkStatus === "unknown";
-  const label = offline
-    ? language === "ar"
-      ? "أوفلاين · تمرينك محفوظ"
-      : "Offline · workout saved"
-    : syncing
-      ? language === "ar"
-        ? "بنزامن التعديلات"
-        : "Syncing changes"
-      : unknown
-        ? language === "ar"
-          ? "الاتصال غير مؤكد · بياناتك آمنة"
-          : "Connection unknown · data is safe"
-        : language === "ar"
-          ? `${pending} تعديل مستني`
-          : `${pending} pending`;
+  const hasFailed = failed > 0;
 
-  const Icon = offline
-    ? CloudOff
-    : syncing
-      ? RefreshCw
-      : unknown
-        ? CircleHelp
-        : UploadCloud;
-  const tone = offline ? colors.warning : colors.info;
+  const label = hasFailed
+    ? language === "ar"
+      ? `${failed} تعديل محتاج إعادة محاولة`
+      : `${failed} changes need retry`
+    : offline
+      ? language === "ar"
+        ? "أوفلاين · تمرينك محفوظ"
+        : "Offline · workout saved"
+      : syncing
+        ? language === "ar"
+          ? "بنزامن التعديلات"
+          : "Syncing changes"
+        : unknown
+          ? language === "ar"
+            ? "الاتصال غير مؤكد · بياناتك آمنة"
+            : "Connection unknown · data is safe"
+          : language === "ar"
+            ? `${pending} تعديل مستني`
+            : `${pending} pending`;
+
+  const Icon = hasFailed
+    ? ShieldAlert
+    : offline
+      ? CloudOff
+      : syncing
+        ? RefreshCw
+        : unknown
+          ? CircleHelp
+          : UploadCloud;
+
+  const tone = hasFailed
+    ? colors.danger
+    : offline
+      ? colors.warning
+      : colors.info;
+  const backgroundColor = hasFailed
+    ? colors.dangerSoft
+    : offline
+      ? colors.warningSoft
+      : colors.infoSoft;
 
   return (
     <Pressable
       disabled={offline || syncing}
-      onPress={() => void syncNow()}
+      onPress={() => void (hasFailed ? retryFailed() : syncNow(true))}
       style={({ pressed }) => ({
         alignSelf: "flex-start",
         flexDirection: rowDirection,
         alignItems: "center",
         gap: 7,
-        backgroundColor: offline ? colors.warningSoft : colors.infoSoft,
+        backgroundColor,
         borderColor: tone,
         borderWidth: 1,
         borderRadius: 999,
@@ -69,7 +97,7 @@ export function ConnectivityBanner() {
       <View style={{ minWidth: 0 }}>
         <AppText
           variant="caption"
-          color={offline ? "warning" : "default"}
+          color={hasFailed ? "danger" : offline ? "warning" : "default"}
         >
           {label}
         </AppText>

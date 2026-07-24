@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import * as Network from "expo-network";
-import { flushSyncQueue, pendingSyncCount } from "@/lib/offline/sync";
+import { getLocalQueueHealth } from "@/lib/offline/database";
+import {
+  flushSyncQueue,
+  retryDeadLetterQueue,
+} from "@/lib/offline/sync";
 import { subscribeSyncEvents } from "@/lib/offline/sync-events";
 import {
   getNetworkSnapshot,
@@ -14,16 +18,23 @@ interface ConnectivityState {
   isConnected: boolean | null;
   isInternetReachable: boolean | null;
   pending: number;
+  failed: number;
+  nextRetryAt: string | null;
   syncing: boolean;
   lastError: string | null;
   lastSyncedAt: string | null;
   refresh: () => Promise<void>;
-  syncNow: () => Promise<void>;
+  syncNow: (force?: boolean) => Promise<void>;
+  retryFailed: () => Promise<void>;
   initialize: () => Promise<() => void>;
 }
 
-async function safePendingCount(fallback = 0) {
-  return pendingSyncCount().catch(() => fallback);
+async function safeQueueHealth(fallback: {
+  pending: number;
+  failed: number;
+  nextRetryAt: string | null;
+}) {
+  return getLocalQueueHealth().catch(() => fallback);
 }
 
 export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
@@ -32,13 +43,20 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
   isConnected: null,
   isInternetReachable: null,
   pending: 0,
+  failed: 0,
+  nextRetryAt: null,
   syncing: false,
   lastError: null,
   lastSyncedAt: null,
 
   refresh: async () => {
-    const [pending, network] = await Promise.all([
-      safePendingCount(get().pending),
+    const state = get();
+    const [queue, network] = await Promise.all([
+      safeQueueHealth({
+        pending: state.pending,
+        failed: state.failed,
+        nextRetryAt: state.nextRetryAt,
+      }),
       getNetworkSnapshot(),
     ]);
 
@@ -47,32 +65,46 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
       networkStatus: network.status,
       isConnected: network.isConnected,
       isInternetReachable: network.isInternetReachable,
-      pending,
+      ...queue,
     });
   },
 
-  syncNow: async () => {
+  syncNow: async (force = false) => {
     if (get().syncing || get().networkStatus === "offline") return;
 
     set({ syncing: true, lastError: null });
     try {
-      const result = await flushSyncQueue();
+      const result = await flushSyncQueue({ force });
       set({
         syncing: false,
         pending: result.pending,
+        failed: result.failed,
+        nextRetryAt: result.nextRetryAt,
         lastError: result.lastError,
         lastSyncedAt:
-          !result.lastError && !result.skipped
+          result.processed > 0 && !result.lastError
             ? new Date().toISOString()
             : get().lastSyncedAt,
       });
     } catch (caught) {
+      const state = get();
+      const queue = await safeQueueHealth({
+        pending: state.pending,
+        failed: state.failed,
+        nextRetryAt: state.nextRetryAt,
+      });
       set({
         syncing: false,
-        pending: await safePendingCount(get().pending),
+        ...queue,
         lastError: caught instanceof Error ? caught.message : String(caught),
       });
     }
+  },
+
+  retryFailed: async () => {
+    if (get().syncing || get().networkStatus === "offline") return;
+    await retryDeadLetterQueue();
+    await get().syncNow(true);
   },
 
   initialize: async () => {
@@ -107,6 +139,11 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
       set((state) => ({
         syncing: snapshot.syncing ?? state.syncing,
         pending: snapshot.pending ?? state.pending,
+        failed: snapshot.failed ?? state.failed,
+        nextRetryAt:
+          snapshot.nextRetryAt === undefined
+            ? state.nextRetryAt
+            : snapshot.nextRetryAt,
         lastError:
           snapshot.lastError === undefined ? state.lastError : snapshot.lastError,
         lastSyncedAt: snapshot.lastSyncedAt ?? state.lastSyncedAt,

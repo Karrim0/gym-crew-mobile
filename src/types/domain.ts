@@ -221,12 +221,12 @@ export interface GroupActivity {
 // ---------------------------------------------------------------------------
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error";
-export type SyncQueueItemStatus = "pending" | "processing" | "failed";
+export type SyncQueueItemStatus = "pending" | "processing" | "failed" | "dead_letter";
 
 export type OfflineMutation =
-  | { entity: "workoutSession"; operation: "create" | "update"; payload: WorkoutSession }
-  | { entity: "workoutExercise"; operation: "create" | "update" | "delete"; payload: WorkoutExercise }
-  | { entity: "workoutSet"; operation: "create" | "update" | "delete"; payload: WorkoutSet };
+  | { entity: "workoutSession"; operation: "upsert" | "delete"; payload: WorkoutSession }
+  | { entity: "workoutExercise"; operation: "upsert" | "delete"; payload: WorkoutExercise }
+  | { entity: "workoutSet"; operation: "upsert" | "delete"; payload: WorkoutSet };
 
 export interface SyncQueueItem {
   id: UUID;

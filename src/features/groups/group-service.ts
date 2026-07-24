@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/database.types";
-import { cacheValue, readCachedValue } from "@/lib/offline/database";
+import { cacheValue, readCachedValue, removeCachedValue } from "@/lib/offline/database";
 import type { CurrentGroupMembership, GroupMember, GroupMemberWeeklyStats, UUID, WorkoutGroup } from "@/types";
 
 type GroupRow = Tables<"groups">;
@@ -18,6 +18,20 @@ function mapGroup(row: GroupRow): WorkoutGroup {
     splitVersion: row.split_version,
     splitUpdatedAt: row.split_updated_at,
   };
+}
+
+
+export function isUsableMembership(value: unknown): value is CurrentGroupMembership {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<CurrentGroupMembership>;
+  return Boolean(
+    candidate.member &&
+      typeof candidate.member.id === "string" &&
+      typeof candidate.member.userId === "string" &&
+      candidate.group &&
+      typeof candidate.group.id === "string" &&
+      typeof candidate.group.name === "string",
+  );
 }
 
 function mapMember(row: MemberRow): GroupMember {
@@ -44,7 +58,8 @@ export async function fetchCurrentMembership(userId: UUID): Promise<CurrentGroup
     return membership;
   } catch (caught) {
     const cached = await readCachedValue<CurrentGroupMembership>(cacheKey);
-    if (cached) return cached;
+    if (isUsableMembership(cached)) return cached;
+    if (cached) await removeCachedValue(cacheKey).catch(() => undefined);
     throw caught;
   }
 }

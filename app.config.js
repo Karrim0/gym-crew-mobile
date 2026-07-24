@@ -3,7 +3,7 @@ const config = {
   name: "Gym Crew",
   slug: "kareem-hanafy",
   owner: "kaghim0s-team",
-  version: "0.5.0",
+  version: "0.5.1",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "gymcrew",
@@ -11,14 +11,14 @@ const config = {
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.karrim.gymcrew",
-    buildNumber: "5",
+    buildNumber: "6",
     infoPlist: {
       CFBundleAllowMixedLocalizations: true,
     },
   },
   android: {
     package: "com.karrim.gymcrew",
-    versionCode: 5,
+    versionCode: 6,
     adaptiveIcon: {
       backgroundColor: "#99E61A",
       foregroundImage: "./assets/images/android-icon-foreground.png",

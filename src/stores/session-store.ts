@@ -2,7 +2,7 @@ import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase/client";
 import { fetchProfile } from "@/features/profile/profile-service";
-import { fetchCurrentMembership } from "@/features/groups/group-service";
+import { fetchCurrentMembership, isUsableMembership } from "@/features/groups/group-service";
 import type { CurrentGroupMembership, UserProfile } from "@/types";
 import {
   clearUserLocalData,
@@ -62,12 +62,15 @@ async function withTimeout<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 async function readCachedContext(userId: string) {
-  const [profile, membership] = await Promise.all([
+  const membershipKey = `membership:${userId}`;
+  const [profile, rawMembership] = await Promise.all([
     readCachedValue<UserProfile>(`profile:${userId}`).catch(() => null),
-    readCachedValue<CurrentGroupMembership>(`membership:${userId}`).catch(
-      () => null,
-    ),
+    readCachedValue<CurrentGroupMembership>(membershipKey).catch(() => null),
   ]);
+  const membership = isUsableMembership(rawMembership) ? rawMembership : null;
+  if (rawMembership && !membership) {
+    await removeCachedValue(membershipKey).catch(() => undefined);
+  }
   return { profile, membership };
 }
 
@@ -94,6 +97,7 @@ function errorMessage(error: unknown) {
 }
 
 function warmWorkspace(userId: string, membership: CurrentGroupMembership) {
+  if (!isUsableMembership(membership)) return;
   void warmOfflineWorkspace(userId, membership.group.id).catch(() => undefined);
 }
 
@@ -108,9 +112,12 @@ async function applyFreshContext(
   if (requestId !== contextRequestId || get().user?.id !== userId) return;
 
   const profile = fresh.profile ?? cached.profile ?? get().profile;
-  const membership =
-    fresh.membership ??
-    (fresh.error ? cached.membership ?? get().membership : null);
+  const currentMembership = isUsableMembership(get().membership) ? get().membership : null;
+  const membership = isUsableMembership(fresh.membership)
+    ? fresh.membership
+    : fresh.error
+      ? cached.membership ?? currentMembership
+      : null;
   const status: ContextStatus = membership
     ? "ready"
     : fresh.error
@@ -143,7 +150,7 @@ async function resolveContext(
   forceRemote = false,
 ) {
   const requestId = ++contextRequestId;
-  const hasUsableContext = Boolean(get().membership);
+  const hasUsableContext = isUsableMembership(get().membership);
 
   if (!hasUsableContext) {
     set({ loadingContext: true, contextStatus: "loading", error: null });
@@ -154,7 +161,7 @@ async function resolveContext(
   const cached = await readCachedContext(userId);
   if (requestId !== contextRequestId || get().user?.id !== userId) return;
 
-  const cachedMembership = cached.membership ?? get().membership;
+  const cachedMembership = cached.membership ?? (isUsableMembership(get().membership) ? get().membership : null);
   const cachedProfile = cached.profile ?? get().profile;
 
   if (cachedProfile || cachedMembership) {

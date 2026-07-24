@@ -1,46 +1,58 @@
-import { createId } from "@/lib/utils/id";
 import { supabase } from "@/lib/supabase/client";
-import { getDatabase } from "./database";
+import {
+  enqueueLocalMutation,
+  getDatabase,
+  getLocalQueueHealth,
+} from "./database";
 import { emitSyncEvent } from "./sync-events";
 import { getNetworkAvailability } from "./network";
+import {
+  MAX_SYNC_ATTEMPTS,
+  PROCESSING_LEASE_MS,
+  compareIsoTimestamps,
+  isLikelyTransportError,
+  nextRetryAt,
+  shouldDeadLetter,
+  type SyncEntity,
+  type SyncMutation,
+  type SyncOperation,
+  type SyncQueueStatus,
+} from "./sync-policy";
 import type { WorkoutExercise, WorkoutSession, WorkoutSet } from "@/types";
-
-export type SyncEntity = "workoutSession" | "workoutExercise" | "workoutSet";
-type SyncOperation = "upsert" | "delete";
 
 interface QueueRow {
   id: string;
   entity: SyncEntity;
   entity_id: string | null;
+  scope_id: string | null;
   operation: SyncOperation;
   payload: string;
+  status: SyncQueueStatus;
   attempts: number;
 }
 
 export interface SyncResult {
   processed: number;
   pending: number;
+  failed: number;
   skipped: boolean;
   lastError: string | null;
+  nextRetryAt: string | null;
 }
 
-export async function enqueueSync(entity: SyncEntity, operation: SyncOperation, payload: WorkoutSession | WorkoutExercise | WorkoutSet) {
-  const db = await getDatabase();
-  const entityId = payload.id;
-  // Keep only the newest pending mutation for the same row. This makes retries
-  // idempotent and avoids replaying every keystroke after a long offline session.
-  await db.runAsync("DELETE FROM sync_queue WHERE entity = ? AND entity_id = ?", entity, entityId);
-  await db.runAsync(
-    `INSERT INTO sync_queue (id, entity, entity_id, operation, payload, attempts, last_error, last_attempt_at, created_at)
-     VALUES (?, ?, ?, ?, ?, 0, NULL, NULL, ?)`,
-    createId(),
+export async function enqueueSync(
+  entity: SyncEntity,
+  operation: SyncOperation,
+  payload: WorkoutSession | WorkoutExercise | WorkoutSet,
+  options?: { scopeId?: string | null; ownerUserId?: string | null },
+) {
+  return enqueueLocalMutation({
     entity,
-    entityId,
     operation,
-    JSON.stringify(payload),
-    new Date().toISOString(),
-  );
-  emitSyncEvent({ pending: await pendingSyncCount() });
+    payload,
+    scopeId: options?.scopeId,
+    ownerUserId: options?.ownerUserId,
+  });
 }
 
 function sessionRow(payload: WorkoutSession) {
@@ -87,14 +99,27 @@ function setRow(payload: WorkoutSet) {
   };
 }
 
-async function remoteIsNewer(table: "workout_sessions" | "workout_sets", id: string, localUpdatedAt: string) {
-  const { data, error } = await supabase.from(table).select("updated_at").eq("id", id).maybeSingle();
+async function remoteIsNewer(
+  table: "workout_sessions" | "workout_sets",
+  id: string,
+  localUpdatedAt: string,
+) {
+  const { data, error } = await supabase
+    .from(table)
+    .select("updated_at")
+    .eq("id", id)
+    .maybeSingle();
+
   if (error) throw error;
-  return Boolean(data?.updated_at && data.updated_at > localUpdatedAt);
+  return compareIsoTimestamps(data?.updated_at, localUpdatedAt) > 0;
 }
 
 async function processQueueRow(row: QueueRow) {
-  const payload = JSON.parse(row.payload) as WorkoutSession | WorkoutExercise | WorkoutSet;
+  const payload = JSON.parse(row.payload) as
+    | WorkoutSession
+    | WorkoutExercise
+    | WorkoutSet;
+
   if (row.entity === "workoutSession") {
     const value = payload as WorkoutSession;
     if (row.operation === "delete") {
@@ -106,6 +131,7 @@ async function processQueueRow(row: QueueRow) {
     }
     return;
   }
+
   if (row.entity === "workoutExercise") {
     const value = payload as WorkoutExercise;
     if (row.operation === "delete") {
@@ -117,6 +143,7 @@ async function processQueueRow(row: QueueRow) {
     }
     return;
   }
+
   const value = payload as WorkoutSet;
   if (row.operation === "delete") {
     const { error } = await supabase.from("workout_sets").delete().eq("id", value.id);
@@ -127,27 +154,119 @@ async function processQueueRow(row: QueueRow) {
   }
 }
 
-let syncing = false;
+let activeSync: Promise<SyncResult> | null = null;
 
-async function safePendingCount(fallback = 0) {
-  return pendingSyncCount().catch(() => fallback);
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
-export async function flushSyncQueue(): Promise<SyncResult> {
-  if (syncing) {
-    return {
-      processed: 0,
-      pending: await safePendingCount(),
-      skipped: true,
-      lastError: null,
-    };
-  }
+async function safeQueueHealth() {
+  return getLocalQueueHealth().catch(() => ({
+    pending: 0,
+    failed: 0,
+    nextRetryAt: null,
+  }));
+}
 
+async function recoverExpiredProcessingRows() {
+  const db = await getDatabase();
+  const expiredBefore = new Date(Date.now() - PROCESSING_LEASE_MS).toISOString();
+  const now = new Date().toISOString();
+
+  await db.runAsync(
+    `UPDATE sync_queue
+     SET status = 'failed',
+         next_attempt_at = COALESCE(next_attempt_at, ?),
+         updated_at = ?
+     WHERE status = 'processing'
+       AND (last_attempt_at IS NULL OR last_attempt_at <= ?)`,
+    now,
+    now,
+    expiredBefore,
+  );
+}
+
+async function selectQueueRows(force: boolean) {
+  const db = await getDatabase();
+  const now = new Date().toISOString();
+
+  return db.getAllAsync<QueueRow>(
+    `SELECT id, entity, entity_id, scope_id, operation, payload, status, attempts
+     FROM sync_queue
+     WHERE status IN ('pending', 'failed')
+       AND dead_lettered_at IS NULL
+       AND attempts < ?
+       AND (? = 1 OR next_attempt_at IS NULL OR next_attempt_at <= ?)
+     ORDER BY
+       CASE entity
+         WHEN 'workoutSession' THEN 0
+         WHEN 'workoutExercise' THEN 1
+         ELSE 2
+       END ASC,
+       created_at ASC,
+       updated_at ASC
+     LIMIT 200`,
+    MAX_SYNC_ATTEMPTS,
+    force ? 1 : 0,
+    now,
+  );
+}
+
+async function markProcessing(rowId: string) {
+  const db = await getDatabase();
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `UPDATE sync_queue
+     SET status = 'processing',
+         last_attempt_at = ?,
+         updated_at = ?
+     WHERE id = ?`,
+    now,
+    now,
+    rowId,
+  );
+}
+
+async function markFailure(row: QueueRow, error: unknown) {
+  const db = await getDatabase();
+  const now = new Date();
+  const attempts = row.attempts + 1;
+  const malformedPayload = error instanceof SyntaxError;
+  const deadLetter = malformedPayload || shouldDeadLetter(attempts);
+  const message = errorMessage(error);
+
+  await db.runAsync(
+    `UPDATE sync_queue
+     SET status = ?,
+         attempts = ?,
+         last_error = ?,
+         last_attempt_at = ?,
+         next_attempt_at = ?,
+         dead_lettered_at = ?,
+         updated_at = ?
+     WHERE id = ?`,
+    deadLetter ? "dead_letter" : "failed",
+    attempts,
+    message,
+    now.toISOString(),
+    deadLetter ? null : nextRetryAt(attempts, now),
+    deadLetter ? now.toISOString() : null,
+    now.toISOString(),
+    row.id,
+  );
+
+  return { deadLetter, message };
+}
+
+async function executeSyncQueue(
+  options: { force?: boolean },
+): Promise<SyncResult> {
   const availability = await getNetworkAvailability();
   if (availability === "offline") {
+    const health = await safeQueueHealth();
     return {
       processed: 0,
-      pending: await safePendingCount(),
+      ...health,
       skipped: true,
       lastError: null,
     };
@@ -159,96 +278,196 @@ export async function flushSyncQueue(): Promise<SyncResult> {
     if (result.error) throw result.error;
     session = result.data.session;
   } catch (caught) {
-    const lastError = caught instanceof Error ? caught.message : String(caught);
-    const pending = await safePendingCount();
-    emitSyncEvent({ syncing: false, pending, lastError });
-    return { processed: 0, pending, skipped: false, lastError };
+    const lastError = errorMessage(caught);
+    const health = await safeQueueHealth();
+    emitSyncEvent({ syncing: false, ...health, lastError });
+    return { processed: 0, ...health, skipped: false, lastError };
   }
 
   if (!session) {
+    const health = await safeQueueHealth();
     return {
       processed: 0,
-      pending: await safePendingCount(),
+      ...health,
       skipped: true,
       lastError: null,
     };
   }
 
-  syncing = true;
   emitSyncEvent({ syncing: true, lastError: null });
 
   let processed = 0;
   let lastError: string | null = null;
 
   try {
+    await recoverExpiredProcessingRows();
+    const rows = await selectQueueRows(Boolean(options.force));
     const db = await getDatabase();
-    const rows = await db.getAllAsync<QueueRow>(
-      `SELECT id, entity, entity_id, operation, payload, attempts
-       FROM sync_queue
-       ORDER BY
-         CASE entity WHEN 'workoutSession' THEN 0 WHEN 'workoutExercise' THEN 1 ELSE 2 END ASC,
-         created_at ASC
-       LIMIT 200`,
-    );
 
     for (const row of rows) {
       try {
-        await db.runAsync(
-          "UPDATE sync_queue SET last_attempt_at = ? WHERE id = ?",
-          new Date().toISOString(),
-          row.id,
-        );
+        await markProcessing(row.id);
         await processQueueRow(row);
         await db.runAsync("DELETE FROM sync_queue WHERE id = ?", row.id);
         processed += 1;
       } catch (caught) {
-        lastError = caught instanceof Error ? caught.message : String(caught);
-        await db.runAsync(
-          "UPDATE sync_queue SET attempts = attempts + 1, last_error = ?, last_attempt_at = ? WHERE id = ?",
-          lastError,
-          new Date().toISOString(),
-          row.id,
-        );
-        // Keep processing unrelated mutations. A single rejected row must not
-        // hold the rest of the workout history.
+        const failed = await markFailure(row, caught);
+        lastError = failed.message;
+
+        // A transport failure usually means every later request would fail too.
+        // Stop here so child rows do not burn through their retry budget.
+        if (isLikelyTransportError(caught)) break;
       }
     }
 
-    const pending = await safePendingCount();
+    const health = await safeQueueHealth();
     emitSyncEvent({
       syncing: false,
-      pending,
+      ...health,
       lastError,
-      lastSyncedAt: !lastError ? new Date().toISOString() : null,
+      lastSyncedAt:
+        processed > 0 && !lastError ? new Date().toISOString() : undefined,
     });
-    return { processed, pending, skipped: false, lastError };
+
+    return {
+      processed,
+      ...health,
+      skipped: false,
+      lastError,
+    };
   } catch (caught) {
-    lastError = caught instanceof Error ? caught.message : String(caught);
-    const pending = await safePendingCount();
-    emitSyncEvent({ syncing: false, pending, lastError });
-    return { processed, pending, skipped: false, lastError };
-  } finally {
-    syncing = false;
+    lastError = errorMessage(caught);
+    const health = await safeQueueHealth();
+    emitSyncEvent({ syncing: false, ...health, lastError });
+    return {
+      processed,
+      ...health,
+      skipped: false,
+      lastError,
+    };
   }
 }
 
+export function flushSyncQueue(
+  options: { force?: boolean } = {},
+): Promise<SyncResult> {
+  if (activeSync) return activeSync;
+
+  activeSync = executeSyncQueue(options).finally(() => {
+    activeSync = null;
+  });
+  return activeSync;
+}
+
 export async function pendingSyncCount() {
+  return (await getLocalQueueHealth()).pending;
+}
+
+export async function failedSyncCount() {
+  return (await getLocalQueueHealth()).failed;
+}
+
+export async function retryDeadLetterQueue() {
   const db = await getDatabase();
-  const row = await db.getFirstAsync<{ count: number }>("SELECT COUNT(*) AS count FROM sync_queue");
-  return row?.count ?? 0;
+  const now = new Date().toISOString();
+
+  await db.runAsync(
+    `UPDATE sync_queue
+     SET status = 'pending',
+         attempts = 0,
+         last_error = NULL,
+         last_attempt_at = NULL,
+         next_attempt_at = NULL,
+         dead_lettered_at = NULL,
+         updated_at = ?
+     WHERE status = 'dead_letter'`,
+    now,
+  );
+
+  const health = await getLocalQueueHealth();
+  emitSyncEvent({ ...health, lastError: null });
+  return health;
+}
+
+export async function discardDeadLetterQueue() {
+  const db = await getDatabase();
+  await db.runAsync("DELETE FROM sync_queue WHERE status = 'dead_letter'");
+  const health = await getLocalQueueHealth();
+  emitSyncEvent({ ...health, lastError: null });
+  return health;
 }
 
 export async function hasPendingEntitySync(entity: SyncEntity, entityId: string) {
   const db = await getDatabase();
   const row = await db.getFirstAsync<{ id: string }>(
-    "SELECT id FROM sync_queue WHERE entity = ? AND entity_id = ? LIMIT 1",
+    `SELECT id
+     FROM sync_queue
+     WHERE entity = ?
+       AND entity_id = ?
+       AND status <> 'dead_letter'
+     LIMIT 1`,
     entity,
     entityId,
   );
+
   if (row) return true;
+
   // Compatibility with queue entries created before entity_id was introduced.
-  const rows = await db.getAllAsync<{ payload: string }>("SELECT payload FROM sync_queue WHERE entity = ? AND entity_id IS NULL", entity);
+  const rows = await db.getAllAsync<{ payload: string }>(
+    `SELECT payload
+     FROM sync_queue
+     WHERE entity = ?
+       AND entity_id IS NULL
+       AND status <> 'dead_letter'`,
+    entity,
+  );
+
   return rows.some((item) => {
-    try { return (JSON.parse(item.payload) as { id?: string }).id === entityId; } catch { return false; }
+    try {
+      return (JSON.parse(item.payload) as { id?: string }).id === entityId;
+    } catch {
+      return false;
+    }
   });
 }
+
+export async function hasPendingWorkoutSync(scopeId: string) {
+  const db = await getDatabase();
+  const direct = await db.getFirstAsync<{ id: string }>(
+    `SELECT id
+     FROM sync_queue
+     WHERE scope_id = ?
+       AND status <> 'dead_letter'
+     LIMIT 1`,
+    scopeId,
+  );
+  if (direct) return true;
+
+  const legacyRows = await db.getAllAsync<{
+    entity: SyncEntity;
+    payload: string;
+  }>(
+    `SELECT entity, payload
+     FROM sync_queue
+     WHERE scope_id IS NULL
+       AND status <> 'dead_letter'`,
+  );
+
+  return legacyRows.some((row) => {
+    try {
+      const payload = JSON.parse(row.payload) as {
+        id?: string;
+        workoutSessionId?: string;
+      };
+      return (
+        (row.entity === "workoutSession" && payload.id === scopeId) ||
+        (row.entity === "workoutExercise" &&
+          payload.workoutSessionId === scopeId)
+      );
+    } catch {
+      return false;
+    }
+  });
+}
+
+export type { SyncEntity, SyncMutation, SyncOperation };

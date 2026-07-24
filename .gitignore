@@ -52,3 +52,6 @@ SQL_TO_RUN_IN_SUPABASE.sql
 FILES_CHANGED.txt
 *_PATCH*
 supabase/.temp/
+
+# Phase 4 generated policy test output
+.phase4-test/
