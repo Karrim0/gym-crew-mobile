@@ -58,7 +58,7 @@ export default function SettingsScreen() {
   const pending = useConnectivityStore((state) => state.pending);
   const syncing = useConnectivityStore((state) => state.syncing);
   const lastError = useConnectivityStore((state) => state.lastError);
-  const isOnline = useConnectivityStore((state) => state.isConnected && state.isInternetReachable);
+  const networkStatus = useConnectivityStore((state) => state.networkStatus);
   const syncNow = useConnectivityStore((state) => state.syncNow);
   const [permission, setPermission] = useState<NotificationPermissionState>("undetermined");
   const [testing, setTesting] = useState(false);
@@ -137,9 +137,46 @@ export default function SettingsScreen() {
       </Card>
 
       <Card style={{ gap: spacing.md }}>
-        <SettingRow icon={<Cloud color={colors.primary} />} title={language === "ar" ? "المزامنة والأوفلاين" : "Sync & offline"} description={!isOnline ? (language === "ar" ? "أنت أوفلاين، كل حاجة محفوظة محليًا." : "You are offline; changes are saved locally.") : pending ? (language === "ar" ? `${pending} تعديل مستني المزامنة.` : `${pending} changes waiting to sync.`) : (language === "ar" ? "كل بياناتك متزامنة." : "All data is synced.")} />
-        {lastError ? <AppText variant="small" color="danger">{friendlyError(new Error(lastError), language === "ar" ? "المزامنة متأخرة شوية. جرّب تاني لما النت يستقر." : "Sync is delayed. Try again when the connection is stable.")}</AppText> : null}
-        <Button variant="secondary" disabled={!isOnline || syncing} loading={syncing} icon={<RefreshCw color={colors.primary} size={18} />} onPress={() => void syncNow()}>{language === "ar" ? "زامن دلوقتي" : "Sync now"}</Button>
+        <SettingRow
+          icon={<Cloud color={colors.primary} />}
+          title={language === "ar" ? "المزامنة والأوفلاين" : "Sync & offline"}
+          description={
+            networkStatus === "offline"
+              ? language === "ar"
+                ? "أنت أوفلاين، كل حاجة محفوظة محليًا."
+                : "You are offline; changes are saved locally."
+              : networkStatus === "unknown"
+                ? language === "ar"
+                  ? "مش قادرين نأكد حالة النت، لكن تقدر تحاول المزامنة."
+                  : "Connection status is unknown, but you can still retry sync."
+                : pending
+                  ? language === "ar"
+                    ? `${pending} تعديل مستني المزامنة.`
+                    : `${pending} changes waiting to sync.`
+                  : language === "ar"
+                    ? "كل بياناتك متزامنة."
+                    : "All data is synced."
+          }
+        />
+        {lastError ? (
+          <AppText variant="small" color="danger">
+            {friendlyError(
+              new Error(lastError),
+              language === "ar"
+                ? "المزامنة متأخرة شوية. جرّب تاني لما النت يستقر."
+                : "Sync is delayed. Try again when the connection is stable.",
+            )}
+          </AppText>
+        ) : null}
+        <Button
+          variant="secondary"
+          disabled={networkStatus === "offline" || syncing}
+          loading={syncing}
+          icon={<RefreshCw color={colors.primary} size={18} />}
+          onPress={() => void syncNow()}
+        >
+          {language === "ar" ? "زامن دلوقتي" : "Sync now"}
+        </Button>
       </Card>
 
       <Card style={{ gap: spacing.md }}>

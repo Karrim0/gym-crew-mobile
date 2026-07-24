@@ -1,8 +1,8 @@
-import * as Network from "expo-network";
 import { createId } from "@/lib/utils/id";
 import { supabase } from "@/lib/supabase/client";
 import { getDatabase } from "./database";
 import { emitSyncEvent } from "./sync-events";
+import { getNetworkAvailability } from "./network";
 import type { WorkoutExercise, WorkoutSession, WorkoutSet } from "@/types";
 
 export type SyncEntity = "workoutSession" | "workoutExercise" | "workoutSet";
@@ -129,19 +129,57 @@ async function processQueueRow(row: QueueRow) {
 
 let syncing = false;
 
+async function safePendingCount(fallback = 0) {
+  return pendingSyncCount().catch(() => fallback);
+}
+
 export async function flushSyncQueue(): Promise<SyncResult> {
-  if (syncing) return { processed: 0, pending: await pendingSyncCount(), skipped: true, lastError: null };
-  const network = await Network.getNetworkStateAsync();
-  if (!network.isConnected || network.isInternetReachable === false) {
-    return { processed: 0, pending: await pendingSyncCount(), skipped: true, lastError: null };
+  if (syncing) {
+    return {
+      processed: 0,
+      pending: await safePendingCount(),
+      skipped: true,
+      lastError: null,
+    };
   }
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) return { processed: 0, pending: await pendingSyncCount(), skipped: true, lastError: null };
+
+  const availability = await getNetworkAvailability();
+  if (availability === "offline") {
+    return {
+      processed: 0,
+      pending: await safePendingCount(),
+      skipped: true,
+      lastError: null,
+    };
+  }
+
+  let session;
+  try {
+    const result = await supabase.auth.getSession();
+    if (result.error) throw result.error;
+    session = result.data.session;
+  } catch (caught) {
+    const lastError = caught instanceof Error ? caught.message : String(caught);
+    const pending = await safePendingCount();
+    emitSyncEvent({ syncing: false, pending, lastError });
+    return { processed: 0, pending, skipped: false, lastError };
+  }
+
+  if (!session) {
+    return {
+      processed: 0,
+      pending: await safePendingCount(),
+      skipped: true,
+      lastError: null,
+    };
+  }
 
   syncing = true;
   emitSyncEvent({ syncing: true, lastError: null });
+
   let processed = 0;
   let lastError: string | null = null;
+
   try {
     const db = await getDatabase();
     const rows = await db.getAllAsync<QueueRow>(
@@ -152,27 +190,42 @@ export async function flushSyncQueue(): Promise<SyncResult> {
          created_at ASC
        LIMIT 200`,
     );
+
     for (const row of rows) {
       try {
-        await db.runAsync("UPDATE sync_queue SET last_attempt_at = ? WHERE id = ?", new Date().toISOString(), row.id);
+        await db.runAsync(
+          "UPDATE sync_queue SET last_attempt_at = ? WHERE id = ?",
+          new Date().toISOString(),
+          row.id,
+        );
         await processQueueRow(row);
         await db.runAsync("DELETE FROM sync_queue WHERE id = ?", row.id);
         processed += 1;
-      } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
+      } catch (caught) {
+        lastError = caught instanceof Error ? caught.message : String(caught);
         await db.runAsync(
           "UPDATE sync_queue SET attempts = attempts + 1, last_error = ?, last_attempt_at = ? WHERE id = ?",
           lastError,
           new Date().toISOString(),
           row.id,
         );
-        // Keep processing unrelated mutations. A single malformed or
-        // temporarily rejected row must not hold the entire workout history.
-        continue;
+        // Keep processing unrelated mutations. A single rejected row must not
+        // hold the rest of the workout history.
       }
     }
-    const pending = await pendingSyncCount();
-    emitSyncEvent({ syncing: false, pending, lastError, lastSyncedAt: !lastError ? new Date().toISOString() : null });
+
+    const pending = await safePendingCount();
+    emitSyncEvent({
+      syncing: false,
+      pending,
+      lastError,
+      lastSyncedAt: !lastError ? new Date().toISOString() : null,
+    });
+    return { processed, pending, skipped: false, lastError };
+  } catch (caught) {
+    lastError = caught instanceof Error ? caught.message : String(caught);
+    const pending = await safePendingCount();
+    emitSyncEvent({ syncing: false, pending, lastError });
     return { processed, pending, skipped: false, lastError };
   } finally {
     syncing = false;
