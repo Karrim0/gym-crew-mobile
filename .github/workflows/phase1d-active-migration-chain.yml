@@ -1,17 +1,6 @@
 name: Phase 1D Active Migration Chain
 
 on:
-  push:
-    branches:
-      - phase/1-database-source-of-truth
-    paths:
-      - "supabase/migrations/**"
-      - "supabase/seed.sql"
-      - "supabase/tests/phase1d_active_chain_test.sql"
-      - "src/lib/supabase/database.types.ts"
-      - "scripts/verify-phase1d-migration-chain.mjs"
-      - "scripts/compare-phase1d-types.mjs"
-      - ".github/workflows/phase1d-active-migration-chain.yml"
   workflow_dispatch:
 
 permissions:
