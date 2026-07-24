@@ -67,3 +67,19 @@ Before merging the phase, test on a physical Android phone:
 6. Restore the network and tap Sync now.
 7. Confirm one remote session, one copy of each exercise, and one copy of each
    set, with zero pending or failed queue entries.
+
+## Null-data crash hotfix (0.5.1)
+
+The Android preview exposed a legacy/corrupt-data edge case where a nested
+Supabase relation or cached object could be `null`, while older mapping code
+read `.id` immediately. The hotfix now:
+
+- validates remote exercise relations before mapping them;
+- preserves the split/workout row with a safe “تمرين يحتاج تحديث” placeholder;
+- repairs malformed split, schedule, workout, and membership caches on read;
+- removes invalid membership cache entries before workspace warmup;
+- guards workspace background loading against malformed membership objects;
+- bumps the Android preview to version code 6 so it is clearly newer than the
+  failing APK.
+
+No local workout, set, or pending sync mutation is deleted by this repair.

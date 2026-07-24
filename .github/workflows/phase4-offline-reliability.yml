@@ -9,11 +9,17 @@ on:
       - "package-lock.json"
       - "src/lib/offline/**"
       - "src/features/workouts/workout-service.ts"
+      - "src/features/splits/exercise-service.ts"
+      - "src/features/splits/split-service.ts"
+      - "src/features/groups/group-service.ts"
+      - "src/stores/session-store.ts"
+      - "app.config.js"
       - "src/stores/connectivity-store.ts"
       - "src/components/layout/connectivity-banner.tsx"
       - "src/app/settings.tsx"
       - "src/types/domain.ts"
       - "scripts/verify-phase4-offline.mjs"
+      - "scripts/verify-phase4-null-safety.mjs"
       - "scripts/run-phase4-policy-tests.mjs"
       - "scripts/phase4-sync-policy.test.mjs"
       - ".github/workflows/phase4-offline-reliability.yml"
@@ -45,6 +51,10 @@ jobs:
         run: |
           mkdir -p artifacts
           npm run verify:phase4 | tee artifacts/phase4-verification.txt
+
+
+      - name: Verify null-data hotfix guards
+        run: npm run verify:phase4-null-safety | tee artifacts/null-data-hotfix.txt
 
       - name: Test retry and idempotency policy
         run: npm run test:offline-policy | tee artifacts/offline-policy-tests.txt

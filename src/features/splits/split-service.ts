@@ -14,14 +14,14 @@ import type {
   WeeklyScheduleDayWithDetails,
   WorkoutType,
 } from "@/types";
-import { mapExercise } from "./exercise-service";
+import { isExercise, isExerciseRow, mapExercise, unavailableExercise } from "./exercise-service";
 
 type SplitDayRow = Tables<"split_days">;
 type SplitExerciseRow = Tables<"split_exercises">;
 type ExerciseRow = Tables<"exercises">;
 type WeeklyScheduleRow = Tables<"weekly_schedule_days">;
-type SplitExerciseQueryRow = SplitExerciseRow & { exercises: ExerciseRow };
-type SplitDayQueryRow = SplitDayRow & { split_exercises: SplitExerciseQueryRow[] };
+type SplitExerciseQueryRow = SplitExerciseRow & { exercises: ExerciseRow | null };
+type SplitDayQueryRow = SplitDayRow & { split_exercises: SplitExerciseQueryRow[] | null };
 type WeeklyScheduleQueryRow = WeeklyScheduleRow & { split_days: SplitDayQueryRow | null };
 
 export type SplitTemplateKey = "manual" | "full_body_3" | "upper_lower_4" | "ppl_ul_5" | "ppl_6" | "girls_strength_4";
@@ -36,11 +36,14 @@ function mapSplitExercise(row: SplitExerciseQueryRow): SplitExerciseWithDetails 
     targetRepsMin: row.target_reps_min,
     targetRepsMax: row.target_reps_max,
     isPersonalAddition: row.is_personal_addition,
-    exercise: mapExercise(row.exercises),
+    exercise: isExerciseRow(row.exercises)
+      ? mapExercise(row.exercises)
+      : unavailableExercise(row.exercise_id),
   };
 }
 
 function mapSplitDay(row: SplitDayQueryRow): SplitDayWithDetails {
+  const rows = Array.isArray(row.split_exercises) ? row.split_exercises : [];
   return {
     id: row.id,
     groupId: row.group_id,
@@ -52,13 +55,66 @@ function mapSplitDay(row: SplitDayQueryRow): SplitDayWithDetails {
     iconKey: row.icon_key as SplitDayIconKey,
     colorKey: row.color_key as SplitDayColorKey,
     dayNotes: row.day_notes,
-    exercises: [...row.split_exercises].sort((a, b) => a.position - b.position).map(mapSplitExercise),
+    exercises: [...rows]
+      .sort((a, b) => a.position - b.position)
+      .map(mapSplitExercise),
   };
+}
+
+function sanitizeCachedSplit(value: SplitDayWithDetails[] | null) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((day): day is SplitDayWithDetails => Boolean(day && typeof day.id === "string" && typeof day.weekday === "string"))
+    .map((day) => ({
+      ...day,
+      exercises: Array.isArray(day.exercises)
+        ? day.exercises
+            .filter((entry) => Boolean(
+              entry &&
+                typeof entry.id === "string" &&
+                typeof entry.exerciseId === "string",
+            ))
+            .map((entry) => ({
+              ...entry,
+              exercise: isExercise(entry.exercise)
+                ? entry.exercise
+                : unavailableExercise(entry.exerciseId),
+            }))
+        : [],
+    }));
 }
 
 function sortSplit(days: SplitDayWithDetails[]) {
   return [...days].sort((a, b) => weekdayOrder.indexOf(a.weekday) - weekdayOrder.indexOf(b.weekday));
 }
+
+function sanitizeCachedSchedule(value: WeeklyScheduleDayWithDetails[] | null) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((day): day is WeeklyScheduleDayWithDetails => Boolean(
+      day && typeof day.id === "string" && typeof day.scheduleDate === "string",
+    ))
+    .map((day) => {
+      const sourceDay = day.sourceDay
+        ? sanitizeCachedSplit([day.sourceDay])[0] ?? null
+        : null;
+      return {
+        ...day,
+        sourceDay,
+        exercises: sourceDay?.exercises ?? (Array.isArray(day.exercises)
+          ? day.exercises
+              .filter((entry) => Boolean(entry && typeof entry.exerciseId === "string"))
+              .map((entry) => ({
+                ...entry,
+                exercise: isExercise(entry.exercise)
+                  ? entry.exercise
+                  : unavailableExercise(entry.exerciseId),
+              }))
+          : []),
+      };
+    });
+}
+
 
 function mapWeekly(row: WeeklyScheduleQueryRow): WeeklyScheduleDayWithDetails {
   const sourceDay = row.split_days ? mapSplitDay(row.split_days) : null;
@@ -124,8 +180,8 @@ export async function fetchPersonalSplit(userId: UUID): Promise<SplitDayWithDeta
   const cacheKey = `personal-split:${userId}`;
   const online = await isNetworkAvailable();
   if (!online) {
-    const cached = await readCachedValue<SplitDayWithDetails[]>(cacheKey);
-    if (cached?.length) return sortSplit(cached);
+    const cached = sanitizeCachedSplit(await readCachedValue<SplitDayWithDetails[]>(cacheKey));
+    if (cached.length) return sortSplit(cached);
     throw new Error("افتح الجدول مرة واحدة بالإنترنت علشان يبقى متاح أوفلاين.");
   }
 
@@ -141,8 +197,8 @@ export async function fetchPersonalSplit(userId: UUID): Promise<SplitDayWithDeta
     await cacheValue(cacheKey, split);
     return split;
   } catch (caught) {
-    const cached = await readCachedValue<SplitDayWithDetails[]>(cacheKey);
-    if (cached?.length) return sortSplit(cached);
+    const cached = sanitizeCachedSplit(await readCachedValue<SplitDayWithDetails[]>(cacheKey));
+    if (cached.length) return sortSplit(cached);
     throw caught;
   }
 }
@@ -154,10 +210,10 @@ export async function fetchEffectiveWeekSchedule(userId: UUID, anchorDate = toda
   const online = await isNetworkAvailable();
 
   if (!online) {
-    const cached = await readCachedValue<WeeklyScheduleDayWithDetails[]>(cacheKey);
-    if (cached?.length) return cached;
-    const personal = await readCachedValue<SplitDayWithDetails[]>(`personal-split:${userId}`);
-    if (personal?.length) return cacheWeekFromPersonalSplit(userId, personal, normalizedAnchor);
+    const cached = sanitizeCachedSchedule(await readCachedValue<WeeklyScheduleDayWithDetails[]>(cacheKey));
+    if (cached.length) return cached;
+    const personal = sanitizeCachedSplit(await readCachedValue<SplitDayWithDetails[]>(`personal-split:${userId}`));
+    if (personal.length) return cacheWeekFromPersonalSplit(userId, personal, normalizedAnchor);
     throw new Error("افتح جدولك مرة واحدة بالإنترنت قبل استخدامه أوفلاين.");
   }
 
@@ -176,10 +232,10 @@ export async function fetchEffectiveWeekSchedule(userId: UUID, anchorDate = toda
     if (schedule.length) await cacheValue(cacheKey, schedule);
     return schedule;
   } catch (caught) {
-    const cached = await readCachedValue<WeeklyScheduleDayWithDetails[]>(cacheKey);
-    if (cached?.length) return cached;
-    const personal = await readCachedValue<SplitDayWithDetails[]>(`personal-split:${userId}`);
-    if (personal?.length) return cacheWeekFromPersonalSplit(userId, personal, normalizedAnchor);
+    const cached = sanitizeCachedSchedule(await readCachedValue<WeeklyScheduleDayWithDetails[]>(cacheKey));
+    if (cached.length) return cached;
+    const personal = sanitizeCachedSplit(await readCachedValue<SplitDayWithDetails[]>(`personal-split:${userId}`));
+    if (personal.length) return cacheWeekFromPersonalSplit(userId, personal, normalizedAnchor);
     throw caught;
   }
 }

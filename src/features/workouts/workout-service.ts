@@ -24,14 +24,14 @@ import type {
   WorkoutSessionWithDetails,
   WorkoutSet,
 } from "@/types";
-import { mapExercise } from "@/features/splits/exercise-service";
+import { isExercise, isExerciseRow, mapExercise, unavailableExercise } from "@/features/splits/exercise-service";
 
 type SessionRow = Tables<"workout_sessions">;
 type WorkoutExerciseRow = Tables<"workout_exercises">;
 type WorkoutSetRow = Tables<"workout_sets">;
 type ExerciseRow = Tables<"exercises">;
-type ExerciseQueryRow = WorkoutExerciseRow & { exercises: ExerciseRow; workout_sets: WorkoutSetRow[] };
-type SessionQueryRow = SessionRow & { workout_exercises: ExerciseQueryRow[] };
+type ExerciseQueryRow = WorkoutExerciseRow & { exercises: ExerciseRow | null; workout_sets: WorkoutSetRow[] | null };
+type SessionQueryRow = SessionRow & { workout_exercises: ExerciseQueryRow[] | null };
 
 const SESSION_SELECT = "*, workout_exercises(*, exercises(*), workout_sets(*))";
 
@@ -59,21 +59,25 @@ function mapSet(row: WorkoutSetRow): WorkoutSet {
 }
 
 function mapWorkoutExercise(row: ExerciseQueryRow): WorkoutExerciseWithDetails {
+  const sets = Array.isArray(row.workout_sets) ? row.workout_sets : [];
   return {
     id: row.id,
     workoutSessionId: row.workout_session_id,
     exerciseId: row.exercise_id,
     order: row.position,
     isSessionOnlyAddition: row.is_session_only_addition,
-    notes: row.notes,
+    notes: row.notes ?? "",
     targetRepsMin: row.target_reps_min ?? 8,
     targetRepsMax: row.target_reps_max ?? 12,
-    exercise: mapExercise(row.exercises),
-    sets: [...row.workout_sets].sort((a, b) => a.set_number - b.set_number).map(mapSet),
+    exercise: isExerciseRow(row.exercises)
+      ? mapExercise(row.exercises)
+      : unavailableExercise(row.exercise_id),
+    sets: [...sets].sort((a, b) => a.set_number - b.set_number).map(mapSet),
   };
 }
 
 function mapSession(row: SessionQueryRow): WorkoutSessionWithDetails {
+  const exercises = Array.isArray(row.workout_exercises) ? row.workout_exercises : [];
   return {
     id: row.id,
     clientId: row.client_id,
@@ -82,25 +86,41 @@ function mapSession(row: SessionQueryRow): WorkoutSessionWithDetails {
     splitDayId: row.split_day_id,
     scheduledDate: row.scheduled_date,
     status: row.status,
-    notes: row.notes,
+    notes: row.notes ?? "",
     durationSeconds: row.duration_seconds,
     startedAt: row.started_at,
     completedAt: row.completed_at,
     updatedAt: row.updated_at,
-    exercises: [...row.workout_exercises].sort((a, b) => a.position - b.position).map(mapWorkoutExercise),
+    exercises: [...exercises]
+      .sort((a, b) => a.position - b.position)
+      .map(mapWorkoutExercise),
   };
 }
 
 function normalizeCachedSession(session: WorkoutSessionWithDetails): WorkoutSessionWithDetails {
+  const exercises = Array.isArray(session.exercises) ? session.exercises : [];
   return {
     ...session,
-    exercises: session.exercises.map((exercise) => ({
-      ...exercise,
-      targetRepsMin: exercise.targetRepsMin ?? 8,
-      targetRepsMax: exercise.targetRepsMax ?? 12,
-      notes: exercise.notes ?? "",
-      sets: exercise.sets.map((set) => ({ ...set, notes: set.notes ?? "" })),
-    })),
+    exercises: exercises
+      .filter((exercise) => Boolean(
+        exercise &&
+          typeof exercise.id === "string" &&
+          typeof exercise.exerciseId === "string",
+      ))
+      .map((exercise) => ({
+        ...exercise,
+        exercise: isExercise(exercise.exercise)
+          ? exercise.exercise
+          : unavailableExercise(exercise.exerciseId),
+        targetRepsMin: exercise.targetRepsMin ?? 8,
+        targetRepsMax: exercise.targetRepsMax ?? 12,
+        notes: exercise.notes ?? "",
+        sets: Array.isArray(exercise.sets)
+          ? exercise.sets
+              .filter((set) => Boolean(set && typeof set.id === "string"))
+              .map((set) => ({ ...set, notes: set.notes ?? "" }))
+          : [],
+      })),
   };
 }
 
