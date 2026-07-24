@@ -12,7 +12,7 @@ interface CardProps extends ViewProps {
   variant?: CardVariant;
 }
 
-export function Card({ children, style, padded = true, muted = false, elevated = true, variant = "default", ...props }: PropsWithChildren<CardProps>) {
+export function Card({ children, style, padded = true, muted = false, elevated = false, variant = "default", ...props }: PropsWithChildren<CardProps>) {
   const { colors, resolved } = useAppTheme();
   const effective = muted ? "muted" : variant;
   const backgroundColor = effective === "muted"
@@ -25,6 +25,7 @@ export function Card({ children, style, padded = true, muted = false, elevated =
           ? "transparent"
           : colors.surface;
   const borderColor = effective === "dark" ? colors.borderStrong : colors.border;
+
   return (
     <View
       {...props}
@@ -36,10 +37,10 @@ export function Card({ children, style, padded = true, muted = false, elevated =
           borderRadius: radii.xl,
           padding: padded ? spacing.lg : 0,
           shadowColor: colors.shadow,
-          shadowOpacity: elevated ? (resolved === "dark" ? 0.32 : 0.075) : 0,
-          shadowRadius: elevated ? 22 : 0,
-          shadowOffset: { width: 0, height: 10 },
-          elevation: elevated ? 3 : 0,
+          shadowOpacity: elevated ? (resolved === "dark" ? 0.22 : 0.08) : 0,
+          shadowRadius: elevated ? 18 : 0,
+          shadowOffset: { width: 0, height: 9 },
+          elevation: elevated ? 2 : 0,
           minWidth: 0,
           overflow: "hidden",
         },

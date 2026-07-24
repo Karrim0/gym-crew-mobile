@@ -30,7 +30,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       language: deviceLanguage,
-      colorMode: "system",
+      colorMode: "dark",
       weightUnit: "kg",
       defaultRestSeconds: 120,
       hapticsEnabled: true,

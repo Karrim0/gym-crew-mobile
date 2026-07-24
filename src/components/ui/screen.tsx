@@ -44,12 +44,12 @@ export function Screen({
         {
           flexGrow: 1,
           width: "100%",
-          maxWidth: 760,
+          maxWidth: 720,
           alignSelf: "center",
           paddingHorizontal: horizontalPadding,
           paddingTop: spacing.sm,
-          paddingBottom: footer ? 124 : spacing.xxl,
-          gap: spacing.lg,
+          paddingBottom: footer ? 112 : spacing.xxl,
+          gap: spacing.md,
           minWidth: 0,
         },
         contentStyle,
@@ -68,7 +68,7 @@ export function Screen({
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}
-            refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} /> : undefined}
+            refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} progressBackgroundColor={colors.surface} /> : undefined}
             {...props}
             contentContainerStyle={[{ flexGrow: 1 }, contentContainerStyle]}
           >

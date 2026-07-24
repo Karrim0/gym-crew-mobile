@@ -1,7 +1,7 @@
 {
   "name": "gym-crew-mobile",
   "main": "expo-router/entry",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "dependencies": {
     "@expo/ui": "~57.0.7",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -74,7 +74,8 @@
     "verify:phase3": "node scripts/verify-phase3-bootstrap.mjs",
     "test:offline-policy": "node scripts/run-phase4-policy-tests.mjs",
     "verify:phase4": "node scripts/verify-phase4-offline.mjs",
-    "verify:phase4-null-safety": "node scripts/verify-phase4-null-safety.mjs"
+    "verify:phase4-null-safety": "node scripts/verify-phase4-null-safety.mjs",
+    "verify:phase5": "node scripts/verify-phase5-product.mjs"
   },
   "private": true
 }

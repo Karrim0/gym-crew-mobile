@@ -7,11 +7,10 @@ import {
   ChevronRight,
   Dumbbell,
   Flame,
-  History,
   Layers3,
   Play,
   RotateCcw,
-  Sparkles,
+  Target,
   TrendingUp,
 } from "lucide-react-native";
 import { Screen } from "@/components/ui/screen";
@@ -29,21 +28,19 @@ import { ActiveWorkoutConflictError, fetchActiveWorkout, fetchDailyConsistencySt
 import { friendlyError } from "@/lib/supabase/errors";
 import { formatShortDate, todayISODateOnly } from "@/lib/utils/date";
 import { spacing } from "@/lib/theme/tokens";
-import { fromKilograms } from "@/lib/utils/weight";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
 import { useSessionStore } from "@/stores/session-store";
-import { useSettingsStore } from "@/stores/settings-store";
 import type { WeeklyScheduleDayWithDetails, WorkoutSessionWithDetails } from "@/types";
 
-function Metric({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   const { colors } = useAppTheme();
   return (
-    <Card elevated={false} style={{ flex: 1, minWidth: 0, padding: 13, gap: 6 }}>
-      <View style={{ width: 36, height: 36, borderRadius: 13, backgroundColor: colors.primarySofter, alignItems: "center", justifyContent: "center" }}>{icon}</View>
+    <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>{icon}<AppText variant="caption" color="muted" numberOfLines={1}>{label}</AppText></View>
       <AppText variant="title3">{value}</AppText>
-      <AppText variant="caption" color="muted" numberOfLines={1}>{label}</AppText>
-    </Card>
+      <View style={{ height: 2, borderRadius: 2, backgroundColor: colors.surfaceStrong }} />
+    </View>
   );
 }
 
@@ -52,7 +49,6 @@ export default function HomeScreen() {
   const { colors } = useAppTheme();
   const router = useRouter();
   const user = useSessionStore((state) => state.user);
-  const weightUnit = useSettingsStore((state) => state.weightUnit);
   const profile = useSessionStore((state) => state.profile);
   const membership = useSessionStore((state) => state.membership);
   const [schedule, setSchedule] = useState<WeeklyScheduleDayWithDetails[]>([]);
@@ -94,8 +90,6 @@ export default function HomeScreen() {
   const activeTotalSets = active?.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0) ?? 0;
   const weekDates = new Set(schedule.map((day) => day.scheduleDate));
   const weekHistory = history.filter((session) => weekDates.has(session.scheduledDate));
-  const weekSets = weekHistory.flatMap((session) => session.exercises.flatMap((exercise) => exercise.sets)).filter((set) => set.isCompleted);
-  const weekVolume = weekSets.reduce((sum, set) => sum + (set.weightKg ?? 0) * (set.reps ?? 0), 0);
   const plannedDays = schedule.filter((day) => day.workoutType !== "rest").length;
   const weeklyPercent = Math.min(100, Math.round((weekHistory.length / Math.max(1, plannedDays)) * 100));
   const todaySets = today?.exercises.reduce((sum, exercise) => sum + exercise.targetSets, 0) ?? 0;
@@ -105,14 +99,7 @@ export default function HomeScreen() {
     if (!user || !membership || !today || rest || !today.sourceSplitDayId) return;
     setStarting(true);
     try {
-      const session = await startWorkout({
-        userId: user.id,
-        groupId: membership.group.id,
-        splitDayId: today.sourceSplitDayId,
-        exercises: today.exercises,
-        scheduledDate: today.scheduleDate,
-        replaceExisting,
-      });
+      const session = await startWorkout({ userId: user.id, groupId: membership.group.id, splitDayId: today.sourceSplitDayId, exercises: today.exercises, scheduledDate: today.scheduleDate, replaceExisting });
       router.push({ pathname: "/workout/[sessionId]", params: { sessionId: session.id, prepare: "1" } });
     } catch (caught) {
       if (caught instanceof ActiveWorkoutConflictError) setConflict(caught.activeSession);
@@ -123,76 +110,70 @@ export default function HomeScreen() {
   if (loading) return <Screen><ScreenSkeleton /></Screen>;
   if (error && !schedule.length) return <Screen><ErrorState message={error} onRetry={() => void load()} /></Screen>;
 
-  const heroTitle = active
-    ? (activeMatchesToday ? (language === "ar" ? "كمّل اللي بدأته" : "Keep it moving") : (language === "ar" ? "تمرينة مفتوحة" : "Workout open"))
+  const title = active
+    ? (language === "ar" ? "كمّل تمرينتك" : "Finish what you started")
     : rest
-      ? (language === "ar" ? "يوم استشفاء" : "Recovery day")
-      : today?.displayName ?? (language === "ar" ? "اختار جدولك" : "Choose your plan");
+      ? (language === "ar" ? "استشفاء النهارده" : "Recovery today")
+      : today?.displayName ?? (language === "ar" ? "جهّز جدولك" : "Build your plan");
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-      <AppHeader title={language === "ar" ? `أهلاً، ${profile?.displayName || "كرو"}` : `Hi, ${profile?.displayName || "Crew"}`} subtitle={language === "ar" ? "كل كليك يقربك من هدفك." : "Every set moves you forward."} />
+      <AppHeader title={language === "ar" ? `أهلاً، ${profile?.displayName || "بطل"}` : `Hi, ${profile?.displayName || "Athlete"}`} subtitle={language === "ar" ? "النهارده فرصة تعمل خطوة قدام." : "Today is another chance to move forward."} />
 
-      <Card variant="dark" style={{ gap: spacing.lg, padding: spacing.xl, borderRadius: 30, borderColor: colors.borderStrong }}>
-        <View pointerEvents="none" style={{ position: "absolute", width: 230, height: 230, borderRadius: 115, backgroundColor: colors.glow, end: -100, bottom: -120 }} />
-        <View pointerEvents="none" style={{ position: "absolute", width: 92, height: 92, borderRadius: 46, backgroundColor: colors.primarySofter, end: 28, top: 24, opacity: 0.16 }} />
-
-        <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between" }}>
-          <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 7 }}><Sparkles color={colors.primary} size={17} /><AppText variant="overline" color="primary">{language === "ar" ? "تمرين النهارده" : "TODAY'S WORKOUT"}</AppText></View>
-          <Pressable onPress={() => router.push("/(tabs)/split")} style={({ pressed }) => ({ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.heroMuted, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.65 : 1 })}><CalendarDays size={19} color={colors.textOnDark} /></Pressable>
+      <Card variant="dark" style={{ gap: spacing.lg, padding: spacing.xl, borderRadius: 26 }}>
+        <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
+          <View style={{ gap: 4, flex: 1 }}>
+            <AppText variant="overline" color="primary">{language === "ar" ? "خطة النهارده" : "TODAY"}</AppText>
+            <AppText variant="title1" style={{ color: colors.textOnDark }} numberOfLines={2}>{title}</AppText>
+          </View>
+          <View style={{ width: 52, height: 52, borderRadius: 17, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>{rest ? <Target color={colors.primaryInk} size={25} /> : <Dumbbell color={colors.primaryInk} size={25} />}</View>
         </View>
 
-        <View style={{ maxWidth: "82%", gap: 7 }}>
-          <AppText variant="hero" style={{ color: colors.textOnDark }} numberOfLines={2}>{heroTitle}</AppText>
-          <AppText color="muted" numberOfLines={2}>
-            {active
-              ? `${formatShortDate(active.scheduledDate, language)} · ${activeCompletedSets}/${activeTotalSets} ${t("common.sets")}`
-              : rest
-                ? (language === "ar" ? "استشفاء كويس النهارده يعني أداء أقوى بكرة." : "Recover today. Perform better tomorrow.")
-                : today
-                  ? `${today.exercises.length} ${t("common.exercises")} · ${todaySets} ${t("common.sets")}`
-                  : (language === "ar" ? "اختار تقسيمة مناسبة وابدأ." : "Pick a split and start.")}
-          </AppText>
-        </View>
+        <AppText variant="small" style={{ color: colors.textMuted }}>
+          {active
+            ? `${formatShortDate(active.scheduledDate, language)} · ${activeCompletedSets}/${activeTotalSets} ${t("common.sets")}`
+            : rest
+              ? (language === "ar" ? "الراحة جزء من الخطة. نام وكل كويس وارجع أقوى." : "Recovery is training too. Eat, sleep, and come back stronger.")
+              : today
+                ? `${today.exercises.length} ${t("common.exercises")} · ${todaySets} ${t("common.sets")}`
+                : (language === "ar" ? "اختار تقسيمة وابدأ أول أسبوع." : "Choose a split and start your first week.")}
+        </AppText>
 
         {active ? <ProgressBar value={(activeCompletedSets / Math.max(1, activeTotalSets)) * 100} /> : null}
 
         {active ? (
-          <View style={{ gap: 9 }}>
-            <Button icon={<RotateCcw color={colors.primaryInk} size={20} />} onPress={() => router.push(`/workout/${active.id}`)}>{language === "ar" ? "كمّل التمرينة" : "Continue workout"}</Button>
-            {!activeMatchesToday && today && !rest ? <Button variant="dark" loading={starting} onPress={() => void begin()}>{language === "ar" ? "ابدأ تمرينة النهارده" : "Start today"}</Button> : null}
-          </View>
+          <Button icon={<RotateCcw color={colors.primaryInk} size={20} />} onPress={() => router.push(`/workout/${active.id}`)}>{language === "ar" ? "كمّل من مكانك" : "Continue workout"}</Button>
         ) : rest ? (
-          <Button variant="dark" icon={<CalendarDays color={colors.primary} size={19} />} onPress={() => router.push("/(tabs)/split")}>{language === "ar" ? "شوف الأسبوع" : "View week"}</Button>
+          <Button variant="dark" icon={<CalendarDays color={colors.primary} size={19} />} onPress={() => router.push("/(tabs)/split")}>{language === "ar" ? "راجع الأسبوع" : "Review your week"}</Button>
         ) : today?.sourceSplitDayId ? (
-          <Button loading={starting} icon={<Play fill={colors.primaryInk} color={colors.primaryInk} size={19} />} onPress={() => void begin()}>{language === "ar" ? "ابدأ التمرين" : "Start workout"}</Button>
+          <Button loading={starting} icon={<Play fill={colors.primaryInk} color={colors.primaryInk} size={19} />} onPress={() => void begin()}>{language === "ar" ? "ابدأ الجيم مود" : "Start gym mode"}</Button>
         ) : (
           <Button onPress={() => router.push("/(tabs)/split")}>{language === "ar" ? "اختار جدول" : "Choose a plan"}</Button>
         )}
+
+        {active && !activeMatchesToday && today && !rest ? <Pressable onPress={() => void begin()} style={({ pressed }) => ({ alignSelf: "center", opacity: pressed ? 0.6 : 1 })}><AppText variant="smallBold" color="primary">{language === "ar" ? "ابدأ تمرينة النهارده بدل الحالية" : "Start today instead"}</AppText></Pressable> : null}
       </Card>
 
-      <View style={{ flexDirection: rowDirection, gap: 10 }}>
-        <Metric icon={<Dumbbell color={colors.primaryStrong} size={19} />} value={String(weekHistory.length)} label={language === "ar" ? "تمارين الأسبوع" : "This week"} />
-        <Metric icon={<Flame color={colors.warning} size={19} />} value={String(streak)} label={language === "ar" ? "استمرارية" : "Day streak"} />
-        <Metric icon={<TrendingUp color={colors.success} size={19} />} value={`${weeklyPercent}%`} label={language === "ar" ? "التزام" : "Adherence"} />
-      </View>
-
-      <Card style={{ gap: spacing.md }}>
+      <Card style={{ gap: spacing.lg }}>
         <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between" }}>
-          <View><AppText variant="title3">{language === "ar" ? "أسبوعك" : "Your week"}</AppText><AppText variant="small" color="muted">{weekVolume ? `${Math.round(fromKilograms(weekVolume, weightUnit) ?? 0).toLocaleString()} ${weightUnit} ${language === "ar" ? "فوليوم" : "volume"}` : (language === "ar" ? "ابدأ أول تمرينة" : "Log your first workout")}</AppText></View>
-          <Pressable onPress={() => router.push("/(tabs)/progress")} style={({ pressed }) => ({ flexDirection: rowDirection, alignItems: "center", gap: 4, opacity: pressed ? 0.65 : 1 })}><AppText variant="smallBold" color="primary">{language === "ar" ? "التقدم" : "Progress"}</AppText><Arrow size={17} color={colors.primaryStrong} /></Pressable>
+          <View><AppText variant="title3">{language === "ar" ? "أداء الأسبوع" : "This week"}</AppText><AppText variant="small" color="muted">{language === "ar" ? `${weekHistory.length} من ${plannedDays || 0} أيام مخططة` : `${weekHistory.length} of ${plannedDays || 0} planned days`}</AppText></View>
+          <Pressable onPress={() => router.push("/(tabs)/progress")} style={({ pressed }) => ({ flexDirection: rowDirection, alignItems: "center", gap: 4, opacity: pressed ? 0.6 : 1 })}><AppText variant="smallBold" color="primary">{language === "ar" ? "التفاصيل" : "Details"}</AppText><Arrow size={17} color={colors.primary} /></Pressable>
         </View>
         <WeekStrip schedule={schedule} sessions={weekHistory} />
+        <View style={{ flexDirection: rowDirection, gap: spacing.md }}>
+          <Stat icon={<Dumbbell color={colors.primary} size={16} />} value={String(weekHistory.length)} label={language === "ar" ? "تمارين" : "Workouts"} />
+          <Stat icon={<Flame color={colors.warning} size={16} />} value={String(streak)} label={language === "ar" ? "استمرارية" : "Streak"} />
+          <Stat icon={<TrendingUp color={colors.success} size={16} />} value={`${weeklyPercent}%`} label={language === "ar" ? "التزام" : "Adherence"} />
+        </View>
       </Card>
 
-      <View style={{ flexDirection: rowDirection, gap: 10 }}>
-        <Pressable onPress={() => router.push("/(tabs)/workout")} style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.76 : 1 })}>
-          <Card elevated={false} style={{ minHeight: 102, gap: 9 }}><View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.primarySofter, alignItems: "center", justifyContent: "center" }}><History color={colors.primaryStrong} size={20} /></View><AppText variant="smallBold">{language === "ar" ? "سجل التمرين" : "Workout log"}</AppText></Card>
-        </Pressable>
-        <Pressable onPress={() => router.push("/(tabs)/split")} style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.76 : 1 })}>
-          <Card elevated={false} style={{ minHeight: 102, gap: 9 }}><View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.primarySofter, alignItems: "center", justifyContent: "center" }}><Layers3 color={colors.primaryStrong} size={20} /></View><AppText variant="smallBold">{language === "ar" ? "جدولك" : "Your split"}</AppText></Card>
-        </Pressable>
-      </View>
+      <Pressable onPress={() => router.push("/(tabs)/split")} style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}>
+        <Card muted elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
+          <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}><Layers3 color={colors.primaryStrong} size={22} /></View>
+          <View style={{ flex: 1, minWidth: 0 }}><AppText variant="bodyStrong">{language === "ar" ? "جدولك التدريبي" : "Training plan"}</AppText><AppText variant="small" color="muted">{language === "ar" ? "عدّل الأيام والتمارين والأهداف" : "Edit days, exercises, and targets"}</AppText></View>
+          <Arrow color={colors.textFaint} size={19} />
+        </Card>
+      </Pressable>
 
       {error ? <Card muted elevated={false}><AppText variant="small" color="warning">{error}</AppText></Card> : null}
 

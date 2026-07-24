@@ -203,7 +203,7 @@ export default function SettingsScreen() {
       </Card>
 
       <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => Alert.alert(t("settings.signOut"), language === "ar" ? "متأكد إنك عايز تخرج؟" : "Are you sure?", [{ text: t("common.cancel"), style: "cancel" }, { text: t("settings.signOut"), style: "destructive", onPress: () => void signOut() }])}>{t("settings.signOut")}</Button>
-      <AppText variant="caption" color="faint" align="center">Gym Crew Mobile · 0.5.0</AppText>
+      <AppText variant="caption" color="faint" align="center">Gym Crew Mobile · 0.6.0</AppText>
     </Screen>
   );
 }
