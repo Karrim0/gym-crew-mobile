@@ -1,6 +1,8 @@
 export interface SyncEventSnapshot {
   syncing?: boolean;
   pending?: number;
+  failed?: number;
+  nextRetryAt?: string | null;
   lastError?: string | null;
   lastSyncedAt?: string | null;
 }

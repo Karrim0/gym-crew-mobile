@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/database.types";
 import {
   cacheWorkout,
+  commitWorkoutMutation,
   getCachedActiveWorkout,
   getCachedWorkout,
   getCachedWorkoutHistory,
@@ -9,7 +10,9 @@ import {
   cacheValue,
   readCachedValue,
 } from "@/lib/offline/database";
-import { enqueueSync, flushSyncQueue, hasPendingEntitySync } from "@/lib/offline/sync";
+import { flushSyncQueue, hasPendingWorkoutSync } from "@/lib/offline/sync";
+import { compareIsoTimestamps, type SyncMutation } from "@/lib/offline/sync-policy";
+import { getNetworkAvailability } from "@/lib/offline/network";
 import { createId } from "@/lib/utils/id";
 import { todayISODateOnly } from "@/lib/utils/date";
 import type {
@@ -101,24 +104,64 @@ function normalizeCachedSession(session: WorkoutSessionWithDetails): WorkoutSess
   };
 }
 
-async function fetchRemoteSession(sessionId: UUID) {
-  const { data, error } = await supabase.from("workout_sessions").select(SESSION_SELECT).eq("id", sessionId).maybeSingle();
+function workoutRevision(session: WorkoutSessionWithDetails) {
+  let revision = session.updatedAt;
+  for (const exercise of session.exercises) {
+    for (const set of exercise.sets) {
+      if (compareIsoTimestamps(set.updatedAt, revision) > 0) {
+        revision = set.updatedAt;
+      }
+    }
+  }
+  return revision;
+}
+
+async function loadRemoteSession(sessionId: UUID) {
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select(SESSION_SELECT)
+    .eq("id", sessionId)
+    .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!data) return null;
-  const session = mapSession(data as unknown as SessionQueryRow);
-  await cacheWorkout(session);
-  return session;
+  return data ? mapSession(data as unknown as SessionQueryRow) : null;
 }
 
 export async function fetchWorkoutSession(sessionId: UUID) {
-  const cached = await getCachedWorkout(sessionId);
-  if (cached) return normalizeCachedSession(cached);
-  return fetchRemoteSession(sessionId);
+  const cachedValue = await getCachedWorkout(sessionId);
+  const cached = cachedValue ? normalizeCachedSession(cachedValue) : null;
+
+  if (cached && await hasPendingWorkoutSync(sessionId)) return cached;
+  if (cached && await getNetworkAvailability() === "offline") return cached;
+
+  try {
+    const remote = await loadRemoteSession(sessionId);
+    if (!remote) {
+      if (cached) await removeCachedWorkout(sessionId);
+      return null;
+    }
+
+    if (
+      cached &&
+      compareIsoTimestamps(workoutRevision(cached), workoutRevision(remote)) >= 0
+    ) {
+      return cached;
+    }
+
+    await cacheWorkout(remote);
+    return remote;
+  } catch (caught) {
+    if (cached) return cached;
+    throw caught;
+  }
 }
 
 export async function fetchActiveWorkout(userId: UUID) {
   const cachedLocal = await getCachedActiveWorkout(userId);
   const local = cachedLocal ? normalizeCachedSession(cachedLocal) : null;
+
+  if (local && await hasPendingWorkoutSync(local.id)) return local;
+  if (local && await getNetworkAvailability() === "offline") return local;
+
   try {
     const { data, error } = await supabase
       .from("workout_sessions")
@@ -131,14 +174,16 @@ export async function fetchActiveWorkout(userId: UUID) {
     if (error) throw error;
 
     if (data) {
-      const session = mapSession(data as unknown as SessionQueryRow);
-      await cacheWorkout(session);
-      return session;
+      const remote = mapSession(data as unknown as SessionQueryRow);
+      if (
+        local &&
+        compareIsoTimestamps(workoutRevision(local), workoutRevision(remote)) >= 0
+      ) {
+        return local;
+      }
+      await cacheWorkout(remote);
+      return remote;
     }
-
-    // A local in-progress session can be a legitimate offline workout. Keep
-    // it only while its session mutation is still waiting to reach Supabase.
-    if (local && await hasPendingEntitySync("workoutSession", local.id)) return local;
 
     // Supabase is reachable and confirms there is no active workout. Remove a
     // stale local ghost so it cannot hijack today's Start Workout action.
@@ -165,7 +210,7 @@ export async function fetchWorkoutHistory(userId: UUID, limit = 50) {
     for (const row of data as unknown as SessionQueryRow[]) {
       const session = mapSession(row);
       const current = merged.get(session.id);
-      if (!current || current.updatedAt < session.updatedAt) {
+      if (!current || compareIsoTimestamps(workoutRevision(current), workoutRevision(session)) < 0) {
         merged.set(session.id, session);
         await cacheWorkout(session);
       }
@@ -225,6 +270,55 @@ function buildExercise(
   };
 }
 
+function requestSync() {
+  void flushSyncQueue().catch(() => undefined);
+}
+
+function sessionMutation(session: WorkoutSessionWithDetails): SyncMutation {
+  return {
+    entity: "workoutSession",
+    operation: "upsert",
+    payload: session,
+    scopeId: session.id,
+    ownerUserId: session.userId,
+  };
+}
+
+function exerciseMutation(
+  session: WorkoutSessionWithDetails,
+  exercise: WorkoutExerciseWithDetails,
+): SyncMutation {
+  return {
+    entity: "workoutExercise",
+    operation: "upsert",
+    payload: { ...exercise, sets: [] },
+    scopeId: session.id,
+    ownerUserId: session.userId,
+  };
+}
+
+function setMutation(
+  session: WorkoutSessionWithDetails,
+  set: WorkoutSet,
+): SyncMutation {
+  return {
+    entity: "workoutSet",
+    operation: "upsert",
+    payload: set,
+    scopeId: session.id,
+    ownerUserId: session.userId,
+  };
+}
+
+async function persistWorkout(
+  session: WorkoutSessionWithDetails,
+  mutations: SyncMutation[],
+) {
+  await commitWorkoutMutation(session, mutations);
+  requestSync();
+  return session;
+}
+
 export async function startWorkout(input: {
   userId: UUID;
   groupId: UUID;
@@ -261,19 +355,12 @@ export async function startWorkout(input: {
     exercises: input.exercises.map((exercise, index) => buildExercise(sessionId, exercise, index, now)),
   };
 
-  await cacheWorkout(session);
-  await enqueueSync("workoutSession", "upsert", session);
+  const mutations: SyncMutation[] = [sessionMutation(session)];
   for (const exercise of session.exercises) {
-    await enqueueSync("workoutExercise", "upsert", { ...exercise, sets: [] });
-    for (const set of exercise.sets) await enqueueSync("workoutSet", "upsert", set);
+    mutations.push(exerciseMutation(session, exercise));
+    for (const set of exercise.sets) mutations.push(setMutation(session, set));
   }
-  void flushSyncQueue();
-  return session;
-}
-
-async function updateSessionLocal(session: WorkoutSessionWithDetails) {
-  await cacheWorkout(session);
-  return session;
+  return persistWorkout(session, mutations);
 }
 
 export async function logWorkoutSet(
@@ -304,9 +391,7 @@ export async function logWorkoutSet(
     sets: exercise.sets.map((set) => set.id === setId ? updatedSet : set),
   }));
   const updated = { ...session, exercises, updatedAt: now };
-  await updateSessionLocal(updated);
-  await enqueueSync("workoutSet", "upsert", updatedSet);
-  void flushSyncQueue();
+  await persistWorkout(updated, [setMutation(updated, updatedSet)]);
   return { session: updated, set: updatedSet };
 }
 
@@ -334,10 +419,7 @@ export async function addWorkoutSet(sessionId: UUID, workoutExerciseId: UUID) {
     updatedAt: now,
     exercises: session.exercises.map((item) => (item.id === workoutExerciseId ? { ...item, sets: [...item.sets, set] } : item)),
   };
-  await updateSessionLocal(updated);
-  await enqueueSync("workoutSet", "upsert", set);
-  void flushSyncQueue();
-  return updated;
+  return persistWorkout(updated, [setMutation(updated, set)]);
 }
 
 export async function reorderWorkoutExercises(sessionId: UUID, orderedIds: UUID[]) {
@@ -350,10 +432,10 @@ export async function reorderWorkoutExercises(sessionId: UUID, orderedIds: UUID[
     return { ...exercise, order };
   });
   const updated = { ...session, exercises, updatedAt: new Date().toISOString() };
-  await updateSessionLocal(updated);
-  for (const exercise of exercises) await enqueueSync("workoutExercise", "upsert", { ...exercise, sets: [] });
-  void flushSyncQueue();
-  return updated;
+  return persistWorkout(
+    updated,
+    exercises.map((exercise) => exerciseMutation(updated, exercise)),
+  );
 }
 
 export async function finishWorkout(sessionId: UUID, durationSeconds: number) {
@@ -367,10 +449,7 @@ export async function finishWorkout(sessionId: UUID, durationSeconds: number) {
     durationSeconds: Math.max(0, Math.floor(durationSeconds)),
     updatedAt: now,
   };
-  await cacheWorkout(completed);
-  await enqueueSync("workoutSession", "upsert", completed);
-  void flushSyncQueue();
-  return completed;
+  return persistWorkout(completed, [sessionMutation(completed)]);
 }
 
 export async function cancelWorkout(sessionId: UUID) {
@@ -382,9 +461,7 @@ export async function cancelWorkout(sessionId: UUID) {
     completedAt: null,
     updatedAt: new Date().toISOString(),
   };
-  await cacheWorkout(cancelled);
-  await enqueueSync("workoutSession", "upsert", cancelled);
-  void flushSyncQueue();
+  await persistWorkout(cancelled, [sessionMutation(cancelled)]);
 }
 
 export async function undoWorkoutSet(sessionId: UUID, setId: UUID) {
@@ -407,10 +484,7 @@ export async function undoWorkoutSet(sessionId: UUID, setId: UUID) {
     sets: exercise.sets.map((set) => set.id === setId ? changed : set),
   }));
   const updated = { ...session, exercises, updatedAt: now };
-  await updateSessionLocal(updated);
-  await enqueueSync("workoutSet", "upsert", changed);
-  void flushSyncQueue();
-  return updated;
+  return persistWorkout(updated, [setMutation(updated, changed)]);
 }
 
 export async function fetchPreviousPerformances(
@@ -481,11 +555,10 @@ export async function addSessionExercise(sessionId: UUID, exercise: Exercise, se
   if (session.exercises.some((item) => item.exerciseId === exercise.id)) throw new Error("التمرين موجود بالفعل في الجلسة.");
   const workoutExercise = createSessionOnlyExercise(sessionId, exercise, session.exercises.length, Math.max(1, setCount));
   const updated = { ...session, exercises: [...session.exercises, workoutExercise], updatedAt: new Date().toISOString() };
-  await cacheWorkout(updated);
-  await enqueueSync("workoutExercise", "upsert", { ...workoutExercise, sets: [] });
-  for (const set of workoutExercise.sets) await enqueueSync("workoutSet", "upsert", set);
-  void flushSyncQueue();
-  return updated;
+  return persistWorkout(updated, [
+    exerciseMutation(updated, workoutExercise),
+    ...workoutExercise.sets.map((set) => setMutation(updated, set)),
+  ]);
 }
 
 export async function updateWorkoutExerciseNotes(sessionId: UUID, workoutExerciseId: UUID, notes: string) {
@@ -497,8 +570,5 @@ export async function updateWorkoutExerciseNotes(sessionId: UUID, workoutExercis
   const changed: WorkoutExerciseWithDetails = { ...current, notes: notes.trim() };
   const exercises = session.exercises.map((exercise) => exercise.id === workoutExerciseId ? changed : exercise);
   const updated = { ...session, exercises, updatedAt: now };
-  await cacheWorkout(updated);
-  await enqueueSync("workoutExercise", "upsert", { ...changed, sets: [] });
-  void flushSyncQueue();
-  return updated;
+  return persistWorkout(updated, [exerciseMutation(updated, changed)]);
 }

@@ -14,6 +14,7 @@ import {
   Scale,
   Smartphone,
   Sun,
+  ShieldAlert,
   Vibrate,
   Volume2,
 } from "lucide-react-native";
@@ -56,10 +57,12 @@ export default function SettingsScreen() {
   const settings = useSettingsStore();
   const signOut = useSessionStore((state) => state.signOutLocal);
   const pending = useConnectivityStore((state) => state.pending);
+  const failed = useConnectivityStore((state) => state.failed);
   const syncing = useConnectivityStore((state) => state.syncing);
   const lastError = useConnectivityStore((state) => state.lastError);
   const networkStatus = useConnectivityStore((state) => state.networkStatus);
   const syncNow = useConnectivityStore((state) => state.syncNow);
+  const retryFailed = useConnectivityStore((state) => state.retryFailed);
   const [permission, setPermission] = useState<NotificationPermissionState>("undetermined");
   const [testing, setTesting] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
@@ -141,21 +144,25 @@ export default function SettingsScreen() {
           icon={<Cloud color={colors.primary} />}
           title={language === "ar" ? "المزامنة والأوفلاين" : "Sync & offline"}
           description={
-            networkStatus === "offline"
+            failed
               ? language === "ar"
-                ? "أنت أوفلاين، كل حاجة محفوظة محليًا."
-                : "You are offline; changes are saved locally."
-              : networkStatus === "unknown"
+                ? `${failed} تعديل فشل بعد كذا محاولة. بياناتك لسه محفوظة على الجهاز.`
+                : `${failed} changes need a manual retry. Your local data is still safe.`
+              : networkStatus === "offline"
                 ? language === "ar"
-                  ? "مش قادرين نأكد حالة النت، لكن تقدر تحاول المزامنة."
-                  : "Connection status is unknown, but you can still retry sync."
-                : pending
+                  ? "أنت أوفلاين، كل حاجة محفوظة محليًا."
+                  : "You are offline; changes are saved locally."
+                : networkStatus === "unknown"
                   ? language === "ar"
-                    ? `${pending} تعديل مستني المزامنة.`
-                    : `${pending} changes waiting to sync.`
-                  : language === "ar"
-                    ? "كل بياناتك متزامنة."
-                    : "All data is synced."
+                    ? "مش قادرين نأكد حالة النت، لكن تقدر تحاول المزامنة."
+                    : "Connection status is unknown, but you can still retry sync."
+                  : pending
+                    ? language === "ar"
+                      ? `${pending} تعديل مستني المزامنة.`
+                      : `${pending} changes waiting to sync.`
+                    : language === "ar"
+                      ? "كل بياناتك متزامنة."
+                      : "All data is synced."
           }
         />
         {lastError ? (
@@ -169,13 +176,23 @@ export default function SettingsScreen() {
           </AppText>
         ) : null}
         <Button
-          variant="secondary"
+          variant={failed ? "danger" : "secondary"}
           disabled={networkStatus === "offline" || syncing}
           loading={syncing}
-          icon={<RefreshCw color={colors.primary} size={18} />}
-          onPress={() => void syncNow()}
+          icon={
+            failed
+              ? <ShieldAlert color={colors.white} size={18} />
+              : <RefreshCw color={colors.primary} size={18} />
+          }
+          onPress={() => void (failed ? retryFailed() : syncNow(true))}
         >
-          {language === "ar" ? "زامن دلوقتي" : "Sync now"}
+          {failed
+            ? language === "ar"
+              ? "حاول تزامن التعديلات الفاشلة"
+              : "Retry failed changes"
+            : language === "ar"
+              ? "زامن دلوقتي"
+              : "Sync now"}
         </Button>
       </Card>
 

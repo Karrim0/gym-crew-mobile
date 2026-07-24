@@ -1,0 +1,81 @@
+name: Phase 4 Offline Reliability
+
+on:
+  push:
+    branches:
+      - phase/4-offline-reliability
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "src/lib/offline/**"
+      - "src/features/workouts/workout-service.ts"
+      - "src/stores/connectivity-store.ts"
+      - "src/components/layout/connectivity-banner.tsx"
+      - "src/app/settings.tsx"
+      - "src/types/domain.ts"
+      - "scripts/verify-phase4-offline.mjs"
+      - "scripts/run-phase4-policy-tests.mjs"
+      - "scripts/phase4-sync-policy.test.mjs"
+      - ".github/workflows/phase4-offline-reliability.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-offline:
+    name: Validate offline persistence and sync queue
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Phase 4 contract
+        run: |
+          mkdir -p artifacts
+          npm run verify:phase4 | tee artifacts/phase4-verification.txt
+
+      - name: Test retry and idempotency policy
+        run: npm run test:offline-policy | tee artifacts/offline-policy-tests.txt
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Check Expo dependency alignment
+        run: npx expo install --check
+
+      - name: Export Android JavaScript bundle
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-key
+        run: |
+          rm -rf dist/phase4-android
+          npx expo export --platform android --output-dir dist/phase4-android
+          find dist/phase4-android -maxdepth 2 -type f -printf "%P\n" \
+            | sort > artifacts/android-export-files.txt
+          du -sh dist/phase4-android > artifacts/android-export-size.txt
+
+      - name: Capture dependency tree
+        run: npm ls --depth=0 > artifacts/npm-top-level.txt
+
+      - name: Upload Phase 4 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gym-crew-phase4-offline-reliability
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14

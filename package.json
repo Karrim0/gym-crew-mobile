@@ -71,7 +71,9 @@
     "bundle:android": "expo export --platform android --output-dir dist/android",
     "audit:baseline": "node scripts/phase0-audit.mjs",
     "verify:phase0": "node scripts/verify-phase0.mjs",
-    "verify:phase3": "node scripts/verify-phase3-bootstrap.mjs"
+    "verify:phase3": "node scripts/verify-phase3-bootstrap.mjs",
+    "test:offline-policy": "node scripts/run-phase4-policy-tests.mjs",
+    "verify:phase4": "node scripts/verify-phase4-offline.mjs"
   },
   "private": true
 }
