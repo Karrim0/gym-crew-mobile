@@ -1,8 +1,9 @@
 export const appConfig = {
   name: "Gym Crew",
   slug: "kareem-hanafy",
-  version: "0.5.0",
+  version: "1.0.0",
   scheme: "gymcrew",
+  buildNumber: 8,
 } as const;
 
 export const env = {

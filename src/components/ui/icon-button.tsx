@@ -15,6 +15,8 @@ export function IconButton({ icon, size = 44, tone = "default", style, ...props 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(props.disabled) }}
+      hitSlop={4}
       {...props}
       style={({ pressed }) => [
         {

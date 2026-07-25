@@ -21,6 +21,8 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
       {label ? <AppText variant="small" color="muted">{label}</AppText> : null}
       <TextInput
         ref={ref}
+        accessibilityLabel={props.accessibilityLabel ?? label}
+        accessibilityState={{ disabled: Boolean(props.editable === false) }}
         placeholderTextColor={colors.textFaint}
         selectionColor={colors.primary}
         {...props}

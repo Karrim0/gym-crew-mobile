@@ -20,7 +20,7 @@ export function AppHeader({ title, subtitle, compact = false }: { title?: string
   return (
     <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm, minHeight: compact ? 52 : 62 }}>
       <Link href="/(tabs)/profile" asChild>
-        <Pressable accessibilityRole="button" style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
+        <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "فتح الحساب" : "Open profile"} style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
           <Avatar name={profile?.displayName ?? "Gym Crew"} url={profile?.avatarUrl ?? null} size={compact ? 42 : 48} ring />
         </Pressable>
       </Link>
@@ -33,6 +33,7 @@ export function AppHeader({ title, subtitle, compact = false }: { title?: string
       <Link href="/notifications" asChild>
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={language === "ar" ? `الإشعارات${unread ? `، ${unread} غير مقروءة` : ""}` : `Notifications${unread ? `, ${unread} unread` : ""}`}
           style={({ pressed }) => ({
             width: 44,
             height: 44,

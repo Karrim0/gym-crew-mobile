@@ -1,49 +1,31 @@
 # Gym Crew Mobile — Final Delivery Plan
 
-The original remaining work is consolidated into three delivery steps.
+The rescue and rebuild are consolidated into six completed engineering phases
+and one physical-device release gate.
 
-## Step 1 — Reliability closure and working APK
+## Completed engineering phases
 
-Includes the Phase 4 offline work plus the null-data crash hotfix.
+1. **Safety baseline and audit** — reproducible checks, source freeze, Android setup.
+2. **Database source of truth** — remote schema capture and migration recovery.
+3. **Database integrity** — RPC repair, lint cleanup, and database tests.
+4. **Bootstrap and connectivity** — resilient session restore and three-state network model.
+5. **Offline reliability and product rebuild** — atomic workout persistence,
+   idempotent sync, null-safe cache recovery, four-tab product experience, and
+   redesigned Gym Mode.
+6. **QA and release hardening** — synchronized `1.0.0 (8)` identity, permission
+   cleanup, accessibility, release policy tests, CI evidence, EAS hygiene, and
+   physical-device checklist.
 
-Exit gate:
+## Remaining release gate
 
-- Home, Split, Workout, Progress, and Settings open without a crash;
-- an offline workout survives force-close and reopen;
-- restoring the network drains the queue without duplicate rows;
-- preview APK 0.5.1 / Android version code 6 passes the phone smoke test.
+No new product phase remains before the release candidate. The only remaining
+work is evidence from the real APK:
 
-## Step 2 — Product rebuild (combined design phases)
+- Phase 6 workflow passes;
+- preview APK `1.0.0 (8)` installs over the previous build;
+- the physical-device checklist passes in Arabic and English;
+- offline force-close/reopen and reconnect produce no missing or duplicate sets;
+- release-blocking defects are fixed on the same Phase 6 branch;
+- merge to `develop`, tag `v1.0.0`, then create the production App Bundle.
 
-Combines the old Design System, Navigation, Screen Redesign, and Gym Mode UX
-phases into one product pass.
-
-Scope:
-
-- premium graphite/charcoal visual system with restrained lime accent;
-- four primary tabs: Home, Workout, Progress, Profile;
-- Split moves inside Home/Workout and Crew moves inside Profile;
-- complete Arabic RTL and English layout pass;
-- redesigned Home, Split, Workout history, Progress, Profile, Settings, auth,
-  onboarding, and all empty/loading/error states;
-- one-exercise-at-a-time Gym Mode with large one-hand controls and minimal
-  alerts;
-- consistent spacing, typography, cards, buttons, icons, and touch targets.
-
-Exit gate: every core path is usable on a physical phone and no screen looks or
-behaves like a prototype.
-
-## Step 3 — QA, release, and handoff
-
-Combines regression testing, release preparation, and repository cleanup.
-
-Scope:
-
-- functional smoke matrix for online/offline/auth/workout/sync;
-- Android preview and production build checks;
-- accessibility, RTL, small-screen, loading, empty, and failure-state checks;
-- release notes, versioning, screenshots, README, and final branch/tag;
-- only release-blocking defects remain open.
-
-Exit gate: a signed release candidate is installable and the repository is left
-on a clean, documented release baseline.
+See `PHYSICAL_DEVICE_RELEASE_CHECKLIST.md` for the exact test matrix.

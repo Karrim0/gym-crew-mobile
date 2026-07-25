@@ -11,6 +11,9 @@ import {
   ChevronLeft,
   ChevronUp,
   Circle,
+  Cloud,
+  CloudOff,
+  Clock3,
   Dumbbell,
   Flag,
   History,
@@ -51,6 +54,7 @@ import { useTranslation } from "@/lib/localization/use-translation";
 import { spacing } from "@/lib/theme/tokens";
 import { formatWeight, fromKilograms, toKilograms } from "@/lib/utils/weight";
 import { useRestTimerStore } from "@/stores/rest-timer-store";
+import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSessionStore } from "@/stores/session-store";
 import type { PreviousPerformanceMap, WorkoutExerciseWithDetails, WorkoutSessionWithDetails, WorkoutSet } from "@/types";
@@ -74,6 +78,16 @@ function bestSet(sets: WorkoutSet[]) {
     .sort((a, b) => ((b.weightKg ?? 0) * (b.reps ?? 0)) - ((a.weightKg ?? 0) * (a.reps ?? 0)))[0];
 }
 
+function formatElapsed(seconds: number) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const remaining = safe % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`
+    : `${minutes}:${String(remaining).padStart(2, "0")}`;
+}
+
 export default function GymModeScreen() {
   useKeepAwake("gym-crew-gym-mode");
   const { height } = useWindowDimensions();
@@ -83,10 +97,14 @@ export default function GymModeScreen() {
   const user = useSessionStore((state) => state.user);
   const settings = useSettingsStore();
   const timer = useRestTimerStore();
+  const networkStatus = useConnectivityStore((state) => state.networkStatus);
+  const pendingSync = useConnectivityStore((state) => state.pending);
+  const syncing = useConnectivityStore((state) => state.syncing);
   const { colors } = useAppTheme();
   const { language, rowDirection, isRTL, t } = useTranslation();
 
   const [session, setSession] = useState<WorkoutSessionWithDetails | null>(null);
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const [previous, setPrevious] = useState<PreviousPerformanceMap>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [weight, setWeight] = useState<number | null>(null);
@@ -121,6 +139,11 @@ export default function GymModeScreen() {
   }, []);
 
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setClockNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const selectExercise = useCallback((exercise: WorkoutExerciseWithDetails, performance: PreviousPerformanceMap, sourceSession: WorkoutSessionWithDetails) => {
     selectedIdRef.current = exercise.id;
@@ -353,6 +376,15 @@ export default function GymModeScreen() {
     ? ["سهل", "مناسب", "صعب", "زوّد الوزن المرة الجاية", "خفف الوزن", "راجع التكنيك"]
     : ["Easy", "Good", "Hard", "Increase next time", "Reduce weight", "Review technique"];
   const strongestPast = past ? bestSet(past.sets) : undefined;
+  const elapsedSeconds = Math.max(0, Math.floor((clockNow - new Date(session.startedAt).getTime()) / 1000));
+  const dataStatus = networkStatus === "offline"
+    ? language === "ar" ? "محفوظ على الجهاز" : "Saved on device"
+    : syncing
+      ? language === "ar" ? "جاري المزامنة" : "Syncing"
+      : pendingSync > 0
+        ? language === "ar" ? `${pendingSync} تعديل محفوظ` : `${pendingSync} saved changes`
+        : language === "ar" ? "متزامن" : "Synced";
+  const DataIcon = networkStatus === "offline" ? CloudOff : Cloud;
 
   return (
     <Screen
@@ -361,17 +393,23 @@ export default function GymModeScreen() {
       contentStyle={{ flex: 1, paddingTop: spacing.xs, paddingBottom: spacing.sm, gap: compact ? 10 : spacing.sm }}
     >
       <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm }}>
-        <Pressable onPress={() => router.replace("/(tabs)/workout")} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}>
+        <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "العودة للتمرين" : "Back to workout"} onPress={() => router.replace("/(tabs)/workout")} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}>
           {isRTL ? <ChevronLeft color={colors.text} size={21} /> : <ArrowLeft color={colors.text} size={21} />}
         </Pressable>
         <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
           <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between" }}>
             <AppText variant="overline" color="primary">GYM MODE</AppText>
-            <AppText variant="caption" color="muted">{completedSets}/{totalSets} {t("common.sets")}</AppText>
+            <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 8 }}>
+              <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 4 }}>
+                <Clock3 color={colors.textMuted} size={13} />
+                <AppText variant="caption" color="muted">{formatElapsed(elapsedSeconds)}</AppText>
+              </View>
+              <AppText variant="caption" color="muted">{completedSets}/{totalSets} {t("common.sets")}</AppText>
+            </View>
           </View>
           <ProgressBar value={progress} />
         </View>
-        <Pressable onPress={() => setMoreOpen(true)} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}>
+        <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "أدوات التمرينة" : "Workout tools"} onPress={() => setMoreOpen(true)} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}>
           <MoreHorizontal color={colors.text} size={22} />
         </Pressable>
       </View>
@@ -386,7 +424,7 @@ export default function GymModeScreen() {
             <AppText variant={compact ? "title3" : "title2"} style={{ color: colors.textOnDark }} numberOfLines={2}>{selected.exercise.name}</AppText>
             <AppText variant="small" style={{ color: colors.textMuted }} numberOfLines={1}>{selected.exercise.primaryMuscle} · {selectedIndex + 1}/{session.exercises.length}</AppText>
           </View>
-          <Pressable onPress={() => setExerciseListOpen(true)} style={({ pressed }) => ({ width: 42, height: 42, borderRadius: 15, backgroundColor: colors.heroMuted, borderWidth: 1, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}>
+          <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "قائمة تمارين اليوم" : "Today’s exercise list"} onPress={() => setExerciseListOpen(true)} style={({ pressed }) => ({ width: 42, height: 42, borderRadius: 15, backgroundColor: colors.heroMuted, borderWidth: 1, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}>
             <ListChecks color={colors.textOnDark} size={19} />
           </Pressable>
         </View>
@@ -395,6 +433,14 @@ export default function GymModeScreen() {
           <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.primary }}><AppText variant="caption" style={{ color: colors.primaryInk }}>{pendingSet ? (language === "ar" ? `سِت ${pendingSet.setNumber} من ${selected.sets.length}` : `Set ${pendingSet.setNumber}/${selected.sets.length}`) : (language === "ar" ? "اكتمل" : "Done")}</AppText></View>
           <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.heroMuted }}><AppText variant="caption" style={{ color: colors.textOnDark }}>{selected.targetRepsMin}–{selected.targetRepsMax} {language === "ar" ? "عدة" : "reps"}</AppText></View>
           {strongestPast ? <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.heroMuted, flexDirection: rowDirection, alignItems: "center", gap: 5 }}><History size={13} color={colors.primary} /><AppText variant="caption" style={{ color: colors.textOnDark }}>{formatWeight(strongestPast.weightKg, settings.weightUnit)} × {strongestPast.reps}</AppText></View> : null}
+        </View>
+
+        <View
+          accessibilityLiveRegion="polite"
+          style={{ flexDirection: rowDirection, alignItems: "center", gap: 6, alignSelf: "flex-start" }}
+        >
+          <DataIcon size={14} color={networkStatus === "offline" ? colors.warning : colors.primary} />
+          <AppText variant="caption" style={{ color: networkStatus === "offline" ? colors.warning : colors.textMuted }}>{dataStatus}</AppText>
         </View>
 
         {previousTargetSet ? (
@@ -413,7 +459,7 @@ export default function GymModeScreen() {
             <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm, backgroundColor: colors.successSoft, borderRadius: 17, padding: 12 }}>
               <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={21} /></View>
               <View style={{ flex: 1 }}><AppText variant="smallBold">{language === "ar" ? "اتسجلت" : "Logged"}</AppText><AppText variant="small" color="muted">{formatWeight(lastLogged.weight, settings.weightUnit)} × {lastLogged.reps}</AppText></View>
-              <Pressable onPress={() => void undoLastSet()} style={({ pressed }) => ({ padding: 8, opacity: pressed ? 0.65 : 1 })}><RotateCcw size={18} color={colors.primaryStrong} /></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "تراجع عن آخر سِت" : "Undo last set"} onPress={() => void undoLastSet()} style={({ pressed }) => ({ padding: 8, opacity: pressed ? 0.65 : 1 })}><RotateCcw size={18} color={colors.primaryStrong} /></Pressable>
             </View>
 
             <View style={{ flex: 1, justifyContent: "center" }}>

@@ -77,6 +77,10 @@ export function ConnectivityBanner() {
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityLiveRegion="polite"
+      accessibilityState={{ disabled: offline || syncing, busy: syncing }}
       disabled={offline || syncing}
       onPress={() => void (hasFailed ? retryFailed() : syncNow(true))}
       style={({ pressed }) => ({

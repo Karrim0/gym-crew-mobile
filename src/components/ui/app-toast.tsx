@@ -27,6 +27,8 @@ export function AppToast({ visible, message, tone = "success", actionLabel, onAc
   return (
     <View
       pointerEvents="box-none"
+      accessibilityLiveRegion="polite"
+      accessibilityRole="alert"
       style={{
         position: "absolute",
         left: spacing.md,

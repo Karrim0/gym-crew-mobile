@@ -1,0 +1,60 @@
+name: Release candidate bug
+about: Report a reproducible issue in Gym Crew 1.0.0
+labels: [bug, release-candidate]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please attach a screenshot or screen recording and avoid sharing passwords, tokens, or private account data.
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: Example: 1.0.0 (8)
+      placeholder: 1.0.0 (8)
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: Samsung A52 — Android 14
+    validations:
+      required: true
+  - type: dropdown
+    id: connectivity
+    attributes:
+      label: Connectivity
+      options:
+        - Online
+        - Offline / Airplane Mode
+        - Reconnecting / syncing
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open...
+        2. Tap...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or logs
+      description: Do not include secrets or personal data.

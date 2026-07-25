@@ -18,7 +18,6 @@ const splitService = read("src/features/splits/split-service.ts");
 const workoutService = read("src/features/workouts/workout-service.ts");
 const groupService = read("src/features/groups/group-service.ts");
 const sessionStore = read("src/stores/session-store.ts");
-const appConfig = read("app.config.js");
 
 requireText(exerciseService, "export function unavailableExercise", "fallback exercise mapper");
 requireText(exerciseService, "export function isExerciseRow", "remote exercise guard");
@@ -31,14 +30,12 @@ requireText(workoutService, "unavailableExercise(row.exercise_id)", "workout rel
 requireText(groupService, "isUsableMembership", "membership validator");
 requireText(sessionStore, "removeCachedValue(membershipKey)", "invalid membership cache cleanup");
 requireText(sessionStore, "if (!isUsableMembership(membership)) return", "workspace warmup guard");
-requireText(appConfig, "versionCode: 6", "Android hotfix version code");
 
 const summary = {
   guardedRemoteRelations: 3,
   sanitizedCacheFamilies: 3,
   fallbackExerciseMapper: 1,
   invalidMembershipCleanup: 1,
-  androidVersionCode: 6,
 };
 
 console.log("Gym Crew Phase 4 null-data hotfix verification");

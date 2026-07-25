@@ -18,6 +18,7 @@ import {
   Vibrate,
   Volume2,
 } from "lucide-react-native";
+import { appConfig } from "@/config/app";
 import { Screen } from "@/components/ui/screen";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
@@ -203,7 +204,7 @@ export default function SettingsScreen() {
       </Card>
 
       <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => Alert.alert(t("settings.signOut"), language === "ar" ? "متأكد إنك عايز تخرج؟" : "Are you sure?", [{ text: t("common.cancel"), style: "cancel" }, { text: t("settings.signOut"), style: "destructive", onPress: () => void signOut() }])}>{t("settings.signOut")}</Button>
-      <AppText variant="caption" color="faint" align="center">Gym Crew Mobile · 0.6.0</AppText>
+      <AppText variant="caption" color="faint" align="center">Gym Crew Mobile · {appConfig.version}</AppText>
     </Screen>
   );
 }

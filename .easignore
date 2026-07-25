@@ -1,0 +1,38 @@
+# Dependencies and local caches
+node_modules/
+.expo/
+.expo-shared/
+.cache/
+.tmp/
+dist/
+web-build/
+
+# Local environment and credentials
+.env
+.env.*
+.env.local
+!.env.example
+credentials.json
+*.jks
+*.keystore
+
+# Local native outputs
+android/.gradle/
+android/app/build/
+android/build/
+ios/Pods/
+ios/build/
+*.apk
+*.aab
+*.ipa
+
+# Editors, logs, reports, and temporary packaging
+.vscode/
+.idea/
+*.log
+reports/
+.phase4-test/
+*.zip
+APPLY_PATCH.cmd
+VERIFY_PATCH.cmd
+payload.zip

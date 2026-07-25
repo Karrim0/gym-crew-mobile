@@ -1,49 +1,45 @@
 # Gym Crew Mobile
 
-Gym Crew is a real React Native application for Android and iOS, built with Expo Router, TypeScript, Supabase and SQLite. It supports solo athletes and workout crews while keeping the in-gym experience focused on the only two values that must be quick: weight and reps.
+Gym Crew is an offline-first React Native training app built with Expo Router,
+TypeScript, Supabase, and SQLite. It supports solo athletes and workout crews,
+while keeping the in-gym flow focused on quick weight and reps logging.
 
-## Current release candidate: 0.5.0 Rescue
+## Current release candidate: 1.0.0
 
-### Core experience
+### Product experience
 
-- Arabic Egyptian and English with RTL/LTR.
-- Light, dark and system themes using the lime / black / white Gym Crew design system.
-- Supabase email authentication, profile and crew onboarding.
-- Solo workspace or shared crew with invite code and privacy controls.
-- Personal split, starter presets and full day/exercise customization.
-- Verified Girls 4-Day Strength preset with 4 training days and 25 exercises.
-- Weekly schedule based on Saturday–Friday and Cairo-local dates.
+- Four primary destinations: Home, Workout, Progress, and Profile.
+- Arabic Egyptian and English with RTL/LTR layouts.
+- Dark graphite design system with a restrained electric-lime accent.
+- Solo workspace or shared crew with invite code and member roles.
+- Personal split, starter templates, weekly schedule, and exercise editing.
+- Loading, empty, offline, sync, and recoverable error states.
 
-### Focused Gym Mode
+### Gym Mode
 
-- A lightweight order check before every workout.
 - One exercise on screen at a time.
-- Previous performance and target range visible without clutter.
-- Large one-hand weight and reps controls with remembered weight increments.
-- One primary action: finish the set.
-- One-tap next set, next exercise, extra set and undo.
-- Notes and rest timer remain optional and hidden until requested.
-- Duplicate-tap protection while a set is saving.
-- Automatic local persistence after every action.
+- Large one-hand weight and reps controls.
+- Previous performance, target range, and strongest past set.
+- Elapsed workout time and live local-save/sync status.
+- One dominant action: finish the set.
+- Next set, next exercise, extra set, undo, notes, reorder, and optional rest timer.
+- Duplicate-tap protection and atomic local persistence after every action.
 
-### Offline-first workout flow
+### Offline reliability
 
-After one successful online warm-up, the app caches:
-
-- Profile and current workspace.
-- Personal split and effective week.
-- Exercise library.
-- Workout history and active workout.
-- Progress and crew summaries where available.
-
-An active workout can be started, updated, closed and reopened offline. Mutations are queued in SQLite and synchronized with Supabase after connectivity returns.
+After one successful online warm-up, the app caches the profile, workspace,
+training plan, exercise library, active workout, history, and progress data.
+An active workout can be continued after force-close while offline. Mutations are
+queued in SQLite with idempotency keys, retry backoff, conflict rules, and a
+failed-change recovery path.
 
 ## Requirements
 
-- Node.js 20+
-- An Expo account for EAS cloud builds
-- The Gym Crew Supabase project with the included migrations applied
-- Android Studio is optional unless you want a local emulator or local native build
+- Node.js 22 recommended
+- npm
+- Expo account for EAS cloud builds
+- Gym Crew Supabase project with the committed migration chain applied
+- Android Studio only for local native builds or an emulator
 
 ## Configure
 
@@ -51,25 +47,46 @@ An active workout can be started, updated, closed and reopened offline. Mutation
 cp .env.example .env.local
 ```
 
-Set only public mobile values:
+Use public mobile values only:
 
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_OR_ANON_KEY
-EXPO_PUBLIC_WEB_API_URL=https://YOUR_WEB_APP.vercel.app
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+EXPO_PUBLIC_WEB_API_URL=https://YOUR_WEB_APP.example
 ```
 
-Never put a Supabase service-role key or any private AI key in an `EXPO_PUBLIC_` variable.
+Never put a service-role key, private API key, or signing credential in an
+`EXPO_PUBLIC_` variable.
 
 ## Development
 
 ```bash
 npm ci
-npm run check
+npm run typecheck
+npm run lint
 npx expo start --dev-client --lan --clear
 ```
 
-The installed development build can scan the Metro QR code. A new native build is required only after native dependency/config changes.
+## Release quality gate
+
+```bash
+npm run release:check
+```
+
+On Windows:
+
+```bat
+call VERIFY_PHASE6_RELEASE.cmd
+```
+
+The release gate verifies:
+
+- Phase 4 offline and null-safety regressions;
+- Phase 5 product/navigation contract;
+- 1.0.0 version synchronization across Expo and Android native code;
+- Android permission allowlist;
+- release policy tests;
+- TypeScript, ESLint, and Expo dependency alignment.
 
 ## Preview APK
 
@@ -77,28 +94,29 @@ The installed development build can scan the Metro QR code. A new native build i
 npx eas-cli@latest build --platform android --profile preview --clear-cache
 ```
 
-The preview profile creates a standalone APK that does not require Metro or a computer.
+The preview profile produces a standalone APK for physical-device testing.
+EAS requires a clean committed tree before starting a build.
 
-## Quality checks
+## Production Android build
 
 ```bash
-npm run typecheck
-npm run lint
-npx expo install --check
-npx expo config --type public
+npx eas-cli@latest build --platform android --profile production
 ```
+
+The production profile produces an Android App Bundle. Complete the physical
+release checklist before uploading it to a store track.
 
 ## Architecture
 
 ```text
 src/app                 Expo Router screens
 src/components          Shared UI and Gym Mode components
-src/features            Profile, crew, split and workout services
-src/lib/offline         SQLite cache, networking and sync queue
-src/lib/notifications   Local notification integration
-src/stores              Auth context, settings, timer and connectivity
+src/features            Auth, profile, crew, split, and workout services
+src/lib/offline         SQLite cache, network state, and mutation queue
+src/lib/notifications   Rest timer and local notifications
+src/stores              Session, settings, timer, notifications, connectivity
 src/types               Domain and generated Supabase types
-supabase/migrations     Idempotent database migrations
+supabase/migrations     Reproducible database migration chain
 ```
 
 ## Release identity
@@ -107,5 +125,9 @@ supabase/migrations     Idempotent database migrations
 - Expo owner: `kaghim0s-team`
 - Android package: `com.karrim.gymcrew`
 - iOS bundle identifier: `com.karrim.gymcrew`
-- App version: `0.5.0`
-- Android version code: `5`
+- App version: `1.0.0`
+- Android version code: `8`
+- iOS build number: `8`
+
+See `docs/PHASE_6_QA_RELEASE.md` and
+`docs/PHYSICAL_DEVICE_RELEASE_CHECKLIST.md` for the final handoff gates.

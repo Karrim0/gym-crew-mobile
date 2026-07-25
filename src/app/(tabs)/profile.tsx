@@ -14,6 +14,7 @@ import {
   UserRoundPen,
   UsersRound,
 } from "lucide-react-native";
+import { appConfig } from "@/config/app";
 import { Screen } from "@/components/ui/screen";
 import { AppText } from "@/components/ui/app-text";
 import { Avatar } from "@/components/profile/avatar";
@@ -115,7 +116,7 @@ export default function ProfileHubScreen() {
       </Card>
 
       {error ? <AppText variant="small" color="warning">{error}</AppText> : null}
-      <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "center", gap: 6 }}><Dumbbell color={colors.textFaint} size={14} /><AppText variant="caption" color="faint">Gym Crew 0.6.0</AppText><Trophy color={colors.textFaint} size={14} /></View>
+      <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "center", gap: 6 }}><Dumbbell color={colors.textFaint} size={14} /><AppText variant="caption" color="faint">Gym Crew {appConfig.version}</AppText><Trophy color={colors.textFaint} size={14} /></View>
     </Screen>
   );
 }

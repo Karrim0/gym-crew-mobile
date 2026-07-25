@@ -42,6 +42,7 @@ export function Button({ children, variant = "primary", loading = false, icon, t
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled || loading), busy: loading }}
       disabled={disabled || loading}
       onPress={(event) => {
         if (hapticsEnabled) void Haptics.selectionAsync();

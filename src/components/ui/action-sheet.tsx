@@ -1,5 +1,6 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import { Modal, Pressable, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
 import { AppText } from "./app-text";
 import { Card } from "./card";
@@ -29,37 +30,65 @@ export function ActionSheet({
   children,
 }: PropsWithChildren<ActionSheetProps>) {
   const { colors } = useAppTheme();
-  const { rowDirection } = useTranslation();
+  const { rowDirection, language } = useTranslation();
+  const insets = useSafeAreaInsets();
   const content = (
     <View style={{ gap: spacing.md }}>
       <View style={{ flexDirection: rowDirection, alignItems: "flex-start", gap: spacing.sm }}>
         <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-          <AppText variant="title2">{title}</AppText>
+          <AppText variant="title2" accessibilityRole="header">{title}</AppText>
           {description ? <AppText color="muted">{description}</AppText> : null}
         </View>
-        {dismissible ? <IconButton onPress={onClose} icon={<X color={colors.text} size={20} />} /> : null}
+        {dismissible ? (
+          <IconButton
+            accessibilityLabel={language === "ar" ? "إغلاق" : "Close"}
+            onPress={onClose}
+            icon={<X color={colors.text} size={20} />}
+          />
+        ) : null}
       </View>
       {children}
     </View>
   );
 
   return (
-    <Modal transparent visible={visible} animationType="slide" onRequestClose={() => { if (dismissible) onClose(); }}>
-      <View style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: "flex-end" }}>
-        <Pressable accessibilityRole="button" onPress={() => { if (dismissible) onClose(); }} style={{ flex: 1 }} />
+    <Modal
+      transparent
+      visible={visible}
+      animationType="slide"
+      statusBarTranslucent
+      hardwareAccelerated
+      onRequestClose={() => { if (dismissible) onClose(); }}
+    >
+      <View
+        accessibilityViewIsModal
+        style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: "flex-end" }}
+      >
+        <Pressable
+          accessible={dismissible}
+          accessibilityRole={dismissible ? "button" : undefined}
+          accessibilityLabel={dismissible ? (language === "ar" ? "إغلاق النافذة" : "Close sheet") : undefined}
+          disabled={!dismissible}
+          onPress={onClose}
+          style={{ flex: 1 }}
+        />
         <Card
           style={{
             borderBottomLeftRadius: 0,
             borderBottomRightRadius: 0,
             borderColor: colors.borderStrong,
             gap: spacing.md,
-            paddingBottom: 34,
+            paddingBottom: Math.max(insets.bottom, spacing.lg),
             maxHeight: "90%",
           }}
         >
           <View style={{ width: 52, height: 5, borderRadius: 999, backgroundColor: colors.surfaceStrong, alignSelf: "center" }} />
           {scroll ? (
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 4 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 4 }}
+            >
               {content}
             </ScrollView>
           ) : content}

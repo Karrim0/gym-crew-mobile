@@ -23,6 +23,8 @@ function looksTechnical(value: string) {
     "syntax error",
     "unexpected token",
     "cannot read properties",
+    "cannot read property",
+    "of null",
     "undefined is not",
   ].some((token) => value.includes(token));
 }

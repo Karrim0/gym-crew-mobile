@@ -8,8 +8,6 @@ const assert = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 
-const packageJson = JSON.parse(read("package.json"));
-const appConfig = read("app.config.js");
 const tabs = read("src/app/(tabs)/_layout.tsx");
 const tokens = read("src/lib/theme/tokens.ts");
 const settings = read("src/stores/settings-store.ts");
@@ -20,9 +18,6 @@ const progress = read("src/app/(tabs)/progress.tsx");
 const profile = read("src/app/(tabs)/profile.tsx");
 const gymMode = read("src/app/workout/[sessionId].tsx");
 
-assert(packageJson.version === "0.6.0", "package.json must be version 0.6.0");
-assert(appConfig.includes('version: "0.6.0"'), "Expo version must be 0.6.0");
-assert(appConfig.includes("versionCode: 7"), "Android versionCode must be 7");
 assert(tabs.includes('name="profile"'), "Profile must be a primary tab");
 assert(tabs.includes('name="split" options={{ href: null'), "Split must move out of the primary tab bar");
 assert(tabs.includes('name="crew" options={{ href: null'), "Crew must move out of the primary tab bar");
@@ -39,8 +34,6 @@ assert(profile.includes("Data status") && profile.includes("Training plan"), "Pr
 assert(gymMode.includes("WorkoutValueControl") && gymMode.includes("Set done"), "One-hand Gym Mode controls must remain intact");
 
 const summary = {
-  appVersion: packageJson.version,
-  androidVersionCode: 7,
   primaryTabs: 4,
   hiddenUtilityRoutes: 2,
   touchTarget: 56,
