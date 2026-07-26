@@ -173,7 +173,7 @@ export const translations = {
   },
   en: {
     common: {
-      appName: "Gym Crew",
+      appName: "OVRLD",
       loading: "Getting things ready...",
       retry: "Try again",
       save: "Save",

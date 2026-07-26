@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
+import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
-import { CalendarClock, ChevronLeft, ChevronRight, Dumbbell, Layers3, Play, TimerReset } from "lucide-react-native";
+import { CalendarClock, ChevronLeft, ChevronRight, Layers3, Play } from "lucide-react-native";
 import { Screen } from "@/components/ui/screen";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppText } from "@/components/ui/app-text";
@@ -11,7 +12,9 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { ScreenSkeleton } from "@/components/ui/skeleton";
 import { SectionHeader } from "@/components/ui/section-header";
+import { PhotoHero } from "@/components/brand/photo-hero";
 import { fetchActiveWorkout, fetchWorkoutHistory } from "@/features/workouts/workout-service";
+import { muscleVisual, workoutVisual } from "@/lib/brand/workout-visuals";
 import { useSessionStore } from "@/stores/session-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useTranslation } from "@/lib/localization/use-translation";
@@ -60,23 +63,23 @@ export default function WorkoutTab() {
   if (error && !history.length && !active) return <Screen><ErrorState message={error} onRetry={() => void load()} /></Screen>;
 
   return (
-    <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-      <AppHeader title={language === "ar" ? "التمرين" : "Workout"} subtitle={language === "ar" ? "افتح الجيم مود وسجّل من غير تعطيل." : "Open gym mode and keep moving."} />
+    <Screen refreshing={refreshing} onRefresh={() => void load(true)} horizontalPadding={16}>
+      <AppHeader title={language === "ar" ? "التمرين" : "Workout"} subtitle={language === "ar" ? "كل اللي محتاجه قبل وأثناء الجيم." : "Everything you need before and during the gym."} />
 
       {active ? (
-        <Card variant="dark" style={{ gap: spacing.lg, padding: spacing.xl, borderRadius: 26 }}>
-          <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
-            <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-              <AppText variant="overline" color="primary">{language === "ar" ? "تمرينة شغالة" : "ACTIVE WORKOUT"}</AppText>
-              <AppText variant="title1" style={{ color: colors.textOnDark }}>{language === "ar" ? "كمّل من مكانك" : "Back to work"}</AppText>
-              <AppText variant="small" style={{ color: colors.textMuted }} numberOfLines={1}>{activeStats.next ? `${language === "ar" ? "التالي" : "Next"}: ${activeStats.next}` : formatShortDate(active.scheduledDate, language)}</AppText>
-            </View>
-            <View style={{ width: 68, height: 68, borderRadius: 22, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><Dumbbell color={colors.primaryInk} size={31} /></View>
+        <PhotoHero
+          source={workoutVisual(active.exercises[0]?.exercise.workoutType)}
+          height={286}
+          topRight={<View style={{ paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, backgroundColor: "rgba(9,10,13,0.76)", borderWidth: 1, borderColor: colors.borderStrong }}><AppText variant="caption" color="primary">{language === "ar" ? "شغالة دلوقتي" : "LIVE"}</AppText></View>}
+        >
+          <View style={{ gap: 11 }}>
+            <AppText variant="hero" style={{ color: colors.textOnDark }}>{language === "ar" ? "كمّل من مكانك" : "Back to work"}</AppText>
+            <AppText variant="small" style={{ color: colors.textMuted }} numberOfLines={1}>{activeStats.next ? `${language === "ar" ? "التالي" : "Next"}: ${activeStats.next}` : formatShortDate(active.scheduledDate, language)}</AppText>
+            <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between" }}><AppText variant="caption" style={{ color: colors.textMuted }}>{activeStats.completed}/{activeStats.total} {t("common.sets")}</AppText><AppText variant="bodyStrong" numeric color="primary">{Math.round(activeStats.percent)}%</AppText></View>
+            <ProgressBar value={activeStats.percent} />
+            <Button onPress={() => router.push(`/workout/${active.id}`)} icon={<Play fill={colors.primaryInk} color={colors.primaryInk} size={20} />}>{language === "ar" ? "افتح Gym Mode" : "Open Gym Mode"}</Button>
           </View>
-          <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between" }}><AppText variant="small" style={{ color: colors.textMuted }}>{activeStats.completed}/{activeStats.total} {t("common.sets")}</AppText><AppText variant="title3" color="primary">{Math.round(activeStats.percent)}%</AppText></View>
-          <ProgressBar value={activeStats.percent} />
-          <Button onPress={() => router.push(`/workout/${active.id}`)} icon={<Play fill={colors.primaryInk} color={colors.primaryInk} size={20} />}>{language === "ar" ? "افتح الجيم مود" : "Open gym mode"}</Button>
-        </Card>
+        </PhotoHero>
       ) : (
         <Card style={{ minHeight: 260, justifyContent: "center" }}>
           <EmptyState title={language === "ar" ? "مفيش تمرينة مفتوحة" : "No active workout"} description={language === "ar" ? "ابدأ تمرينة النهارده من الرئيسية أو راجع جدولك." : "Start today’s workout from Home or review your plan."} actionLabel={language === "ar" ? "روح للرئيسية" : "Go to Home"} onAction={() => router.push("/(tabs)/home")} />
@@ -84,8 +87,8 @@ export default function WorkoutTab() {
       )}
 
       <Pressable onPress={() => router.push("/(tabs)/split")} style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}>
-        <Card muted elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
-          <View style={{ width: 46, height: 46, borderRadius: 15, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}><Layers3 color={colors.primaryStrong} size={21} /></View>
+        <Card variant="outline" elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
+          <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primarySofter, alignItems: "center", justifyContent: "center" }}><Layers3 color={colors.primaryStrong} size={22} /></View>
           <View style={{ flex: 1, minWidth: 0 }}><AppText variant="bodyStrong">{language === "ar" ? "الخطة والجدول" : "Plan & schedule"}</AppText><AppText variant="small" color="muted">{language === "ar" ? "عدّل الأيام أو التمارين قبل ما تبدأ" : "Edit days or exercises before you start"}</AppText></View>
           <Arrow color={colors.textFaint} size={19} />
         </Card>
@@ -97,11 +100,19 @@ export default function WorkoutTab() {
           const sets = session.exercises.reduce((sum, exercise) => sum + exercise.sets.filter((set) => set.isCompleted).length, 0);
           const volume = session.exercises.flatMap((exercise) => exercise.sets).filter((set) => set.isCompleted).reduce((sum, set) => sum + (set.weightKg ?? 0) * (set.reps ?? 0), 0);
           const minutes = Math.max(1, Math.round(session.durationSeconds / 60));
+          const lead = session.exercises[0]?.exercise;
           return (
             <Pressable key={session.id} accessibilityRole="button" onPress={() => router.push(`/workout-history/${session.id}`)} style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}>
-              <Card elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md, padding: spacing.md }}>
-                <View style={{ width: 48, height: 48, borderRadius: 15, backgroundColor: colors.surfaceMuted, alignItems: "center", justifyContent: "center" }}><CalendarClock color={colors.primary} size={22} /></View>
-                <View style={{ flex: 1, minWidth: 0, gap: 3 }}><AppText variant="bodyStrong">{formatShortDate(session.scheduledDate, language)}</AppText><View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 9 }}><View style={{ flexDirection: rowDirection, gap: 4, alignItems: "center" }}><Dumbbell size={13} color={colors.textMuted} /><AppText variant="caption" color="muted">{sets} {t("common.sets")}</AppText></View><View style={{ flexDirection: rowDirection, gap: 4, alignItems: "center" }}><TimerReset size={13} color={colors.textMuted} /><AppText variant="caption" color="muted">{minutes} {t("common.minutes")}</AppText></View></View><AppText variant="caption" color="faint">{Math.round(fromKilograms(volume, weightUnit) ?? 0).toLocaleString()} {weightUnit} {language === "ar" ? "فوليوم" : "volume"}</AppText></View>
+              <Card elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md, padding: 10 }}>
+                <View style={{ width: 62, height: 62, borderRadius: 18, overflow: "hidden", backgroundColor: colors.surfaceMuted }}>
+                  <Image source={muscleVisual(lead?.primaryMuscle)} contentFit="cover" style={{ width: "100%", height: "100%" }} />
+                  <View pointerEvents="none" style={{ position: "absolute", inset: 0, backgroundColor: "rgba(5,6,8,0.24)" }} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                  <AppText variant="bodyStrong">{lead?.name ?? formatShortDate(session.scheduledDate, language)}</AppText>
+                  <AppText variant="caption" color="muted">{formatShortDate(session.scheduledDate, language)} · {sets} {t("common.sets")} · {minutes} {t("common.minutes")}</AppText>
+                  <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 5 }}><CalendarClock size={13} color={colors.primary} /><AppText variant="caption" numeric color="faint">{Math.round(fromKilograms(volume, weightUnit) ?? 0).toLocaleString()} {weightUnit} {language === "ar" ? "فوليوم" : "volume"}</AppText></View>
+                </View>
                 <Arrow color={colors.textFaint} size={18} />
               </Card>
             </Pressable>

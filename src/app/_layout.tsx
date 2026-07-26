@@ -8,6 +8,21 @@ import {
   type Href,
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { useFonts } from "expo-font";
+import {
+  Alexandria_400Regular,
+  Alexandria_500Medium,
+  Alexandria_600SemiBold,
+  Alexandria_700Bold,
+  Alexandria_800ExtraBold,
+} from "@expo-google-fonts/alexandria";
+import {
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+  Inter_900Black,
+} from "@expo-google-fonts/inter";
 import * as Notifications from "expo-notifications";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -151,7 +166,7 @@ function NotificationRouter() {
 
       addNotification({
         id: notification.request.identifier,
-        title: content.title ?? "Gym Crew",
+        title: content.title ?? "OVRLD",
         body: content.body ?? "",
         route,
         createdAt: new Date(notification.date).toISOString(),
@@ -328,6 +343,18 @@ function WorkspaceRecoveryBanner() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    Alexandria_400Regular,
+    Alexandria_500Medium,
+    Alexandria_600SemiBold,
+    Alexandria_700Bold,
+    Alexandria_800ExtraBold,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+    Inter_900Black,
+  });
   const { resolved, colors } = useAppTheme();
   const initialized = useSessionStore((state) => state.initialized);
   const bootstrapStatus = useSessionStore((state) => state.bootstrapStatus);
@@ -339,6 +366,12 @@ export default function RootLayout() {
   const syncNow = useConnectivityStore((state) => state.syncNow);
   const session = useSessionStore((state) => state.session);
   const refreshContext = useSessionStore((state) => state.refreshContext);
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      void SplashScreen.hideAsync().catch(() => undefined);
+    }
+  }, [fontError, fontsLoaded]);
 
   useEffect(() => {
     let active = true;
@@ -395,7 +428,7 @@ export default function RootLayout() {
     syncNow,
   ]);
 
-  if (!initialized) {
+  if ((!fontsLoaded && !fontError) || !initialized) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <LoadingState />

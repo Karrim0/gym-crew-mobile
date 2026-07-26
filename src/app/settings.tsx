@@ -10,6 +10,7 @@ import {
   Languages,
   LogOut,
   Moon,
+  MousePointerClick,
   RefreshCw,
   Scale,
   Smartphone,
@@ -125,6 +126,21 @@ export default function SettingsScreen() {
       </Card>
 
       <Card style={{ gap: spacing.lg }}>
+        <SettingRow
+          icon={<MousePointerClick color={colors.primary} />}
+          title={language === "ar" ? "تسجيل بضغطة واحدة" : "One-tap set logging"}
+          description={language === "ar" ? "بعد أول مرة، اضغط اقتراح الوزن والعدات وسجّله فورًا." : "After the first entry, tap a weight-and-reps preset to log it instantly."}
+        >
+          <Switch
+            value={settings.oneTapLoggingEnabled}
+            onValueChange={settings.setOneTapLoggingEnabled}
+            trackColor={{ false: colors.surfaceStrong, true: colors.primarySoft }}
+            thumbColor={settings.oneTapLoggingEnabled ? colors.primary : colors.textFaint}
+          />
+        </SettingRow>
+      </Card>
+
+      <Card style={{ gap: spacing.lg }}>
         <SettingRow icon={<Bell color={colors.primary} />} title={language === "ar" ? "إشعارات الراحة" : "Rest notifications"} description={permission === "granted" ? (language === "ar" ? "الإذن متفعل" : "Permission granted") : permission === "denied" ? (language === "ar" ? "مقفولة من إعدادات الموبايل" : "Blocked in system settings") : (language === "ar" ? "هنطلب الإذن وقت التفعيل" : "Permission will be requested when enabled")}>
           <Switch value={settings.notificationsEnabled && permission !== "denied"} onValueChange={(value) => void toggleNotifications(value)} trackColor={{ false: colors.surfaceStrong, true: colors.primarySoft }} thumbColor={settings.notificationsEnabled ? colors.primary : colors.textFaint} />
         </SettingRow>
@@ -204,7 +220,7 @@ export default function SettingsScreen() {
       </Card>
 
       <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => Alert.alert(t("settings.signOut"), language === "ar" ? "متأكد إنك عايز تخرج؟" : "Are you sure?", [{ text: t("common.cancel"), style: "cancel" }, { text: t("settings.signOut"), style: "destructive", onPress: () => void signOut() }])}>{t("settings.signOut")}</Button>
-      <AppText variant="caption" color="faint" align="center">Gym Crew Mobile · {appConfig.version}</AppText>
+      <AppText variant="caption" color="faint" align="center">OVRLD · {appConfig.version}</AppText>
     </Screen>
   );
 }

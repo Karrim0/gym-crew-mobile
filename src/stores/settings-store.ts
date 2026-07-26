@@ -17,6 +17,7 @@ interface SettingsState {
   hapticsEnabled: boolean;
   soundEnabled: boolean;
   notificationsEnabled: boolean;
+  oneTapLoggingEnabled: boolean;
   setLanguage: (language: Language) => void;
   setColorMode: (mode: ColorMode) => void;
   setWeightUnit: (unit: WeightUnit) => void;
@@ -24,6 +25,7 @@ interface SettingsState {
   setHapticsEnabled: (enabled: boolean) => void;
   setSoundEnabled: (enabled: boolean) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
+  setOneTapLoggingEnabled: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -36,6 +38,7 @@ export const useSettingsStore = create<SettingsState>()(
       hapticsEnabled: true,
       soundEnabled: true,
       notificationsEnabled: true,
+      oneTapLoggingEnabled: true,
       setLanguage: (language) => set({ language }),
       setColorMode: (colorMode) => set({ colorMode }),
       setWeightUnit: (weightUnit) => set({ weightUnit }),
@@ -43,6 +46,7 @@ export const useSettingsStore = create<SettingsState>()(
       setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
       setSoundEnabled: (soundEnabled) => set({ soundEnabled }),
       setNotificationsEnabled: (notificationsEnabled) => set({ notificationsEnabled }),
+      setOneTapLoggingEnabled: (oneTapLoggingEnabled) => set({ oneTapLoggingEnabled }),
     }),
     {
       name: "gym-crew:settings",
@@ -55,6 +59,7 @@ export const useSettingsStore = create<SettingsState>()(
         hapticsEnabled: state.hapticsEnabled,
         soundEnabled: state.soundEnabled,
         notificationsEnabled: state.notificationsEnabled,
+        oneTapLoggingEnabled: state.oneTapLoggingEnabled,
       }),
     },
   ),

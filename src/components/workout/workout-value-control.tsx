@@ -35,7 +35,7 @@ export function WorkoutValueControl({ label, value, suffix, step, min, max, onCh
           style={({ pressed }) => ({ minHeight: 66, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}
         >
           <View style={{ flexDirection: rowDirection, alignItems: "flex-end", gap: 5 }}>
-            <AppText variant="display" align="center" numberOfLines={1}>{value ?? "—"}</AppText>
+            <AppText variant="metricLarge" numeric align="center" numberOfLines={1}>{value ?? "—"}</AppText>
             {suffix ? <AppText variant="smallBold" color="muted" style={{ paddingBottom: 8 }}>{suffix}</AppText> : null}
           </View>
         </Pressable>

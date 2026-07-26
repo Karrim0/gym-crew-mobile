@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.1.0 — OVRLD UI Rebuild
+
+### Brand
+
+- Renamed the user-facing product to OVRLD and introduced the Obsidian Ember identity.
+- Added a new adaptive app icon, monochrome icon, splash mark, and OVRLD wordmark.
+- Added Alexandria for interface copy and Inter for numeric performance data.
+- Bundled three optimized workout photographs locally for offline-safe hero imagery.
+
+### Product experience
+
+- Rebuilt Home, Workout, Progress, Profile, authentication, the app header, and bottom navigation.
+- Added Click-first Gym Mode with Repeat, Progress, and Back-off presets.
+- Added an optional one-tap logging mode while preserving manual editing.
+- Kept four primary tabs and moved plan and crew tools into their product-appropriate locations.
+
+### Compatibility
+
+- Preserved the existing package identifier, SQLite database, storage keys, and legacy callback scheme so installed users keep their local data and authentication continuity.
+
 ## 1.0.0 — Release Candidate
 
 ### Product

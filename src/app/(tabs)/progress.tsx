@@ -9,7 +9,9 @@ import { Card } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
 import { ErrorState } from "@/components/ui/states";
 import { ScreenSkeleton } from "@/components/ui/skeleton";
+import { PhotoHero } from "@/components/brand/photo-hero";
 import { fetchWorkoutHistory } from "@/features/workouts/workout-service";
+import { brandImages } from "@/lib/brand/workout-visuals";
 import { friendlyError } from "@/lib/supabase/errors";
 import { useSessionStore } from "@/stores/session-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -19,6 +21,16 @@ import { formatShortDate, toISODateOnly } from "@/lib/utils/date";
 import { spacing } from "@/lib/theme/tokens";
 import { formatWeight, fromKilograms } from "@/lib/utils/weight";
 import type { WorkoutSessionWithDetails } from "@/types";
+
+function Metric({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={{ flex: 1, minWidth: 0, gap: 5, padding: 12, borderRadius: 17, backgroundColor: "rgba(19,22,26,0.84)", borderWidth: 1, borderColor: colors.borderStrong }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>{icon}<AppText variant="caption" style={{ color: colors.textMuted }} numberOfLines={1}>{label}</AppText></View>
+      <AppText variant="metric" numeric style={{ color: colors.textOnDark }}>{value}</AppText>
+    </View>
+  );
+}
 
 export default function ProgressScreen() {
   const router = useRouter();
@@ -81,44 +93,37 @@ export default function ProgressScreen() {
   const displayVolume = fromKilograms(summary.volume, weightUnit) ?? 0;
 
   return (
-    <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-      <AppHeader title={language === "ar" ? "تقدمك" : "Progress"} subtitle={language === "ar" ? "شوف الاتجاه، مش رقم يوم واحد." : "Track the trend, not one day."} />
+    <Screen refreshing={refreshing} onRefresh={() => void load(true)} horizontalPadding={16}>
+      <AppHeader title={language === "ar" ? "التقدم" : "Progress"} subtitle={language === "ar" ? "الترند أهم من رقم يوم واحد." : "The trend matters more than one day."} />
 
-      <Card variant="dark" style={{ padding: spacing.xl, gap: spacing.lg, borderRadius: 26 }}>
-        <View style={{ flexDirection: rowDirection, justifyContent: "space-between", alignItems: "flex-start", gap: spacing.md }}>
-          <View style={{ gap: 3 }}><AppText variant="overline" color="primary">{language === "ar" ? "آخر 7 أيام" : "LAST 7 DAYS"}</AppText><View style={{ flexDirection: rowDirection, alignItems: "flex-end", gap: 8 }}><AppText variant="display" style={{ color: colors.textOnDark }}>{summary.sessions}</AppText><AppText variant="small" style={{ color: colors.textMuted, marginBottom: 6 }}>{language === "ar" ? "تمرينات" : "workouts"}</AppText></View></View>
-          <View style={{ width: 52, height: 52, borderRadius: 17, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><BarChart3 color={colors.primaryInk} size={25} /></View>
-        </View>
-
-        <View style={{ height: 126, flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
-          {summary.days.map((day) => (
-            <View key={day.iso} style={{ flex: 1, alignItems: "center", gap: 7 }}>
-              <View style={{ width: "100%", height: 94, borderRadius: 10, backgroundColor: colors.heroMuted, justifyContent: "flex-end", overflow: "hidden", padding: 3 }}>
-                <View style={{ width: "100%", height: Math.max(5, (day.sets / maxDaySets) * 88), borderRadius: 7, backgroundColor: day.sets ? colors.primary : colors.borderStrong, alignItems: "center", paddingTop: 4 }}>
-                  {day.sets ? <AppText variant="caption" style={{ color: colors.primaryInk }}>{day.sets}</AppText> : null}
+      <PhotoHero source={brandImages.strength} height={330} topRight={<View style={{ paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, backgroundColor: "rgba(9,10,13,0.76)", borderWidth: 1, borderColor: colors.borderStrong }}><AppText variant="caption" color="primary">{language === "ar" ? "آخر 7 أيام" : "7 DAYS"}</AppText></View>}>
+        <View style={{ gap: 13 }}>
+          <View style={{ flexDirection: rowDirection, alignItems: "flex-end", gap: 9 }}><AppText variant="metricLarge" numeric style={{ color: colors.textOnDark }}>{summary.sessions}</AppText><AppText variant="small" style={{ color: colors.textMuted, marginBottom: 7 }}>{language === "ar" ? "تمرينات مكتملة" : "workouts completed"}</AppText></View>
+          <View style={{ height: 92, flexDirection: "row", alignItems: "flex-end", gap: 7 }}>
+            {summary.days.map((day) => (
+              <View key={day.iso} style={{ flex: 1, alignItems: "center", gap: 5 }}>
+                <View style={{ width: "100%", height: 68, borderRadius: 9, backgroundColor: "rgba(25,28,34,0.86)", justifyContent: "flex-end", overflow: "hidden", padding: 3 }}>
+                  <View style={{ width: "100%", height: Math.max(5, (day.sets / maxDaySets) * 62), borderRadius: 7, backgroundColor: day.sets ? colors.primary : colors.borderStrong }} />
                 </View>
+                <AppText variant="caption" style={{ color: day.sets ? colors.textOnDark : colors.textFaint }} align="center">{day.label}</AppText>
               </View>
-              <AppText variant="caption" style={{ color: day.sets ? colors.textOnDark : colors.textFaint }} align="center">{day.label}</AppText>
-            </View>
-          ))}
+            ))}
+          </View>
+          <View style={{ flexDirection: rowDirection, gap: 8 }}>
+            <Metric icon={<Dumbbell color={colors.primary} size={15} />} value={String(summary.sets)} label={language === "ar" ? "سِت" : "sets"} />
+            <Metric icon={<TimerReset color={colors.primary} size={15} />} value={String(summary.minutes)} label={language === "ar" ? "دقيقة" : "minutes"} />
+            <Metric icon={<Flame color={colors.warning} size={15} />} value={displayVolume >= 1000 ? `${(displayVolume / 1000).toFixed(1)}k` : String(Math.round(displayVolume))} label={`${weightUnit} ${language === "ar" ? "فوليوم" : "volume"}`} />
+          </View>
         </View>
-
-        <View style={{ flexDirection: rowDirection, gap: 8 }}>
-          {[
-            { icon: <Dumbbell color={colors.primary} size={17} />, value: summary.sets, label: language === "ar" ? "سِت" : "sets" },
-            { icon: <TimerReset color={colors.primary} size={17} />, value: summary.minutes, label: language === "ar" ? "دقيقة" : "minutes" },
-            { icon: <Flame color={colors.primary} size={17} />, value: displayVolume >= 1000 ? `${(displayVolume / 1000).toFixed(1)}k` : Math.round(displayVolume), label: `${weightUnit} ${language === "ar" ? "فوليوم" : "volume"}` },
-          ].map((item) => <View key={item.label} style={{ flex: 1, minWidth: 0, padding: 10, borderRadius: 15, backgroundColor: colors.heroMuted, gap: 4 }}>{item.icon}<AppText variant="bodyStrong" style={{ color: colors.textOnDark }}>{item.value}</AppText><AppText variant="caption" style={{ color: colors.textMuted }} numberOfLines={1}>{item.label}</AppText></View>)}
-        </View>
-      </Card>
+      </PhotoHero>
 
       <SectionHeader title={language === "ar" ? "أقوى أرقامك" : "Top performance"} />
       <Card style={{ gap: 0, paddingVertical: 4 }}>
         {summary.records.length ? summary.records.map(([name, record], index) => (
-          <View key={name} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm, minHeight: 68, borderBottomWidth: index === summary.records.length - 1 ? 0 : 1, borderBottomColor: colors.border }}>
-            <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: index === 0 ? colors.warningSoft : colors.surfaceMuted, alignItems: "center", justifyContent: "center" }}><Trophy color={index === 0 ? colors.warning : colors.primary} size={18} /></View>
+          <View key={name} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm, minHeight: 70, borderBottomWidth: index === summary.records.length - 1 ? 0 : 1, borderBottomColor: colors.border }}>
+            <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: index === 0 ? colors.warningSoft : colors.surfaceMuted, alignItems: "center", justifyContent: "center" }}><Trophy color={index === 0 ? colors.warning : colors.primary} size={19} /></View>
             <AppText style={{ flex: 1 }} variant="bodyStrong" numberOfLines={1}>{name}</AppText>
-            <View style={{ alignItems: "flex-end" }}><AppText color="primary" variant="bodyStrong">{formatWeight(record.weight, weightUnit)}</AppText><AppText variant="caption" color="muted">× {record.reps}</AppText></View>
+            <View style={{ alignItems: "flex-end" }}><AppText color="primary" variant="bodyStrong" numeric>{formatWeight(record.weight, weightUnit)}</AppText><AppText variant="caption" numeric color="muted">× {record.reps}</AppText></View>
           </View>
         )) : <AppText color="muted" style={{ paddingVertical: spacing.lg }}>{t("progress.empty")}</AppText>}
       </Card>
@@ -130,7 +135,7 @@ export default function ProgressScreen() {
           return (
             <Pressable key={session.id} accessibilityRole="button" onPress={() => router.push(`/workout-history/${session.id}`)} style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}>
               <Card elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md, padding: spacing.md }}>
-                <View style={{ width: 46, height: 46, borderRadius: 15, backgroundColor: colors.primarySofter, alignItems: "center", justifyContent: "center" }}><BarChart3 color={colors.primaryStrong} size={20} /></View>
+                <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primarySofter, alignItems: "center", justifyContent: "center" }}><BarChart3 color={colors.primaryStrong} size={21} /></View>
                 <View style={{ flex: 1, minWidth: 0 }}><AppText variant="bodyStrong">{formatShortDate(session.scheduledDate, language)}</AppText><AppText variant="small" color="muted">{session.exercises.length} {t("common.exercises")} · {sets} {t("common.sets")} · {Math.round(session.durationSeconds / 60)} {t("common.minutes")}</AppText></View>
                 <Arrow size={18} color={colors.textFaint} />
               </Card>

@@ -7,10 +7,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Cloud,
-  Dumbbell,
   Settings2,
   ShieldCheck,
-  Trophy,
   UserRoundPen,
   UsersRound,
 } from "lucide-react-native";
@@ -20,7 +18,10 @@ import { AppText } from "@/components/ui/app-text";
 import { Avatar } from "@/components/profile/avatar";
 import { Card } from "@/components/ui/card";
 import { AppHeader } from "@/components/layout/app-header";
+import { PhotoHero } from "@/components/brand/photo-hero";
+import { BrandWordmark } from "@/components/brand/brand-mark";
 import { fetchWorkoutHistory } from "@/features/workouts/workout-service";
+import { brandImages } from "@/lib/brand/workout-visuals";
 import { friendlyError } from "@/lib/supabase/errors";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
@@ -34,8 +35,8 @@ function MenuRow({ icon, title, subtitle, onPress }: { icon: React.ReactNode; ti
   const { rowDirection, isRTL } = useTranslation();
   const Arrow = isRTL ? ChevronLeft : ChevronRight;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm, minHeight: 68, paddingVertical: 8, opacity: pressed ? 0.65 : 1 })}>
-      <View style={{ width: 44, height: 44, borderRadius: 15, backgroundColor: colors.surfaceMuted, alignItems: "center", justifyContent: "center" }}>{icon}</View>
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm, minHeight: 70, paddingVertical: 8, opacity: pressed ? 0.65 : 1 })}>
+      <View style={{ width: 46, height: 46, borderRadius: 15, backgroundColor: colors.surfaceMuted, alignItems: "center", justifyContent: "center" }}>{icon}</View>
       <View style={{ flex: 1, minWidth: 0 }}><AppText variant="bodyStrong">{title}</AppText>{subtitle ? <AppText variant="small" color="muted" numberOfLines={1}>{subtitle}</AppText> : null}</View>
       <Arrow color={colors.textFaint} size={19} />
     </Pressable>
@@ -77,46 +78,48 @@ export default function ProfileHubScreen() {
         : language === "ar" ? "كل البيانات متزامنة" : "Everything is synced";
 
   return (
-    <Screen>
-      <AppHeader title={language === "ar" ? "حسابي" : "Profile"} subtitle={language === "ar" ? "خطتك، جروبك، وإعداداتك." : "Your plan, crew, and settings."} />
+    <Screen horizontalPadding={16}>
+      <AppHeader title={language === "ar" ? "حسابي" : "Profile"} subtitle={language === "ar" ? "خطتك، فريقك، وتحكمك الكامل." : "Your plan, crew, and full control."} />
 
-      <Card variant="dark" style={{ padding: spacing.xl, gap: spacing.lg, borderRadius: 26 }}>
-        <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
-          <Avatar name={profile?.displayName} url={profile?.avatarUrl} size={74} ring />
-          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-            <AppText variant="title2" style={{ color: colors.textOnDark }} numberOfLines={1}>{profile?.displayName || (language === "ar" ? "رياضي" : "Athlete")}</AppText>
-            <AppText variant="small" style={{ color: colors.textMuted }} numberOfLines={1}>{user?.email}</AppText>
-            <View style={{ alignSelf: "flex-start", marginTop: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.heroMuted }}><AppText variant="caption" color="primary">{membership?.group.isPersonal ? (language === "ar" ? "وضع فردي" : "Solo mode") : membership?.group.name}</AppText></View>
+      <PhotoHero source={brandImages.squat} height={300}>
+        <View style={{ gap: spacing.lg }}>
+          <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
+            <Avatar name={profile?.displayName} url={profile?.avatarUrl} size={78} ring />
+            <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+              <AppText variant="title2" style={{ color: colors.textOnDark }} numberOfLines={1}>{profile?.displayName || (language === "ar" ? "رياضي" : "Athlete")}</AppText>
+              <AppText variant="small" style={{ color: colors.textMuted }} numberOfLines={1}>{user?.email}</AppText>
+              <View style={{ alignSelf: "flex-start", marginTop: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: "rgba(19,22,26,0.84)", borderWidth: 1, borderColor: colors.borderStrong }}><AppText variant="caption" color="primary">{membership?.group.isPersonal ? (language === "ar" ? "وضع فردي" : "Solo mode") : membership?.group.name}</AppText></View>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "تعديل الملف الشخصي" : "Edit profile"} onPress={() => router.push("/profile")} style={({ pressed }) => ({ width: 46, height: 46, borderRadius: 15, backgroundColor: "rgba(19,22,26,0.86)", borderWidth: 1, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.65 : 1 })}><UserRoundPen color={colors.primary} size={21} /></Pressable>
           </View>
-          <Pressable onPress={() => router.push("/profile")} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 15, backgroundColor: colors.heroMuted, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.65 : 1 })}><UserRoundPen color={colors.primary} size={20} /></Pressable>
-        </View>
 
-        <View style={{ flexDirection: rowDirection, gap: 8 }}>
-          {[
-            { value: stats.workouts, label: language === "ar" ? "تمرينة" : "Workouts" },
-            { value: stats.sets, label: language === "ar" ? "سِت" : "Sets" },
-            { value: stats.exercises, label: language === "ar" ? "تمرين" : "Exercises" },
-          ].map((item) => <View key={item.label} style={{ flex: 1, padding: 11, borderRadius: 16, backgroundColor: colors.heroMuted, gap: 2 }}><AppText variant="title3" style={{ color: colors.textOnDark }}>{item.value}</AppText><AppText variant="caption" style={{ color: colors.textMuted }}>{item.label}</AppText></View>)}
+          <View style={{ flexDirection: rowDirection, gap: 8 }}>
+            {[
+              { value: stats.workouts, label: language === "ar" ? "تمرينة" : "Workouts" },
+              { value: stats.sets, label: language === "ar" ? "سِت" : "Sets" },
+              { value: stats.exercises, label: language === "ar" ? "تمرين" : "Exercises" },
+            ].map((item) => <View key={item.label} style={{ flex: 1, padding: 12, borderRadius: 17, backgroundColor: "rgba(19,22,26,0.84)", borderWidth: 1, borderColor: colors.borderStrong, gap: 2 }}><AppText variant="metric" numeric style={{ color: colors.textOnDark }}>{item.value}</AppText><AppText variant="caption" style={{ color: colors.textMuted }}>{item.label}</AppText></View>)}
+          </View>
         </View>
-      </Card>
+      </PhotoHero>
 
       <Card style={{ paddingVertical: 6 }}>
         <MenuRow icon={<CalendarDays color={colors.primary} size={21} />} title={language === "ar" ? "جدولي التدريبي" : "Training plan"} subtitle={language === "ar" ? "الأيام والتمارين والأهداف" : "Days, exercises, and targets"} onPress={() => router.push("/(tabs)/split")} />
         <View style={{ height: 1, backgroundColor: colors.border }} />
-        <MenuRow icon={<UsersRound color={colors.primary} size={21} />} title={membership?.group.isPersonal ? (language === "ar" ? "الجروب" : "Crew") : membership?.group.name ?? "Crew"} subtitle={membership?.group.isPersonal ? (language === "ar" ? "اعمل جروب أو انضم بكود" : "Create or join a crew") : (language === "ar" ? "نشاط وترتيب الأعضاء" : "Activity and leaderboard")} onPress={() => router.push("/(tabs)/crew")} />
+        <MenuRow icon={<UsersRound color={colors.primary} size={21} />} title={membership?.group.isPersonal ? (language === "ar" ? "الفريق" : "Crew") : membership?.group.name ?? "Crew"} subtitle={membership?.group.isPersonal ? (language === "ar" ? "اعمل فريق أو انضم بكود" : "Create or join a crew") : (language === "ar" ? "نشاط وترتيب الأعضاء" : "Activity and leaderboard")} onPress={() => router.push("/(tabs)/crew")} />
         <View style={{ height: 1, backgroundColor: colors.border }} />
         <MenuRow icon={<Bell color={colors.primary} size={21} />} title={language === "ar" ? "الإشعارات" : "Notifications"} onPress={() => router.push("/notifications")} />
         <View style={{ height: 1, backgroundColor: colors.border }} />
-        <MenuRow icon={<Settings2 color={colors.primary} size={21} />} title={language === "ar" ? "الإعدادات" : "Settings"} subtitle={language === "ar" ? "اللغة، الشكل، الراحة، والوحدات" : "Language, theme, rest, and units"} onPress={() => router.push("/settings")} />
+        <MenuRow icon={<Settings2 color={colors.primary} size={21} />} title={language === "ar" ? "الإعدادات" : "Settings"} subtitle={language === "ar" ? "التسجيل السريع، الشكل، والوحدات" : "Quick logging, appearance, and units"} onPress={() => router.push("/settings")} />
       </Card>
 
       <Card muted elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm }}>
-        <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: failed ? colors.dangerSoft : colors.primarySofter, alignItems: "center", justifyContent: "center" }}>{failed ? <ShieldCheck color={colors.danger} size={20} /> : <Cloud color={colors.primaryStrong} size={20} />}</View>
+        <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: failed ? colors.dangerSoft : colors.primarySofter, alignItems: "center", justifyContent: "center" }}>{failed ? <ShieldCheck color={colors.danger} size={20} /> : <Cloud color={colors.primaryStrong} size={20} />}</View>
         <View style={{ flex: 1, minWidth: 0 }}><AppText variant="smallBold">{language === "ar" ? "حالة البيانات" : "Data status"}</AppText><AppText variant="small" color={failed ? "danger" : "muted"}>{syncLabel}</AppText></View>
       </Card>
 
       {error ? <AppText variant="small" color="warning">{error}</AppText> : null}
-      <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "center", gap: 6 }}><Dumbbell color={colors.textFaint} size={14} /><AppText variant="caption" color="faint">Gym Crew {appConfig.version}</AppText><Trophy color={colors.textFaint} size={14} /></View>
+      <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "center", gap: 8 }}><BrandWordmark compact /><AppText variant="caption" numeric color="faint">{appConfig.version}</AppText></View>
     </Screen>
   );
 }

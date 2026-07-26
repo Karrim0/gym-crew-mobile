@@ -1,9 +1,9 @@
 export const appConfig = {
-  name: "Gym Crew",
+  name: "OVRLD",
   slug: "kareem-hanafy",
-  version: "1.0.0",
-  scheme: "gymcrew",
-  buildNumber: 8,
+  version: "1.1.0",
+  scheme: "ovrld",
+  buildNumber: 9,
 } as const;
 
 export const env = {

@@ -1,28 +1,30 @@
-# Gym Crew Mobile
+# OVRLD Mobile
 
-Gym Crew is an offline-first React Native training app built with Expo Router,
+OVRLD is an offline-first React Native performance-training app built with Expo Router,
 TypeScript, Supabase, and SQLite. It supports solo athletes and workout crews,
 while keeping the in-gym flow focused on quick weight and reps logging.
 
-## Current release candidate: 1.0.0
+## Current release candidate: 1.1.0
 
-### Product experience
+### OVRLD product experience
 
+- Obsidian Ember visual system with an ember-orange accent and warm-white typography.
+- Alexandria for Arabic and interface copy; Inter for weights, reps, timers, and metrics.
 - Four primary destinations: Home, Workout, Progress, and Profile.
+- Locally bundled workout photography, a new adaptive icon, and an OVRLD splash mark.
 - Arabic Egyptian and English with RTL/LTR layouts.
-- Dark graphite design system with a restrained electric-lime accent.
 - Solo workspace or shared crew with invite code and member roles.
 - Personal split, starter templates, weekly schedule, and exercise editing.
-- Loading, empty, offline, sync, and recoverable error states.
+- Consistent loading, empty, offline, sync, and recoverable error states.
 
-### Gym Mode
+### Click-first Gym Mode
 
-- One exercise on screen at a time.
-- Large one-hand weight and reps controls.
-- Previous performance, target range, and strongest past set.
-- Elapsed workout time and live local-save/sync status.
-- One dominant action: finish the set.
-- Next set, next exercise, extra set, undo, notes, reorder, and optional rest timer.
+- First-time exercises ask for weight and reps once.
+- Later sets offer Repeat, Progress, and Back-off presets derived from recent performance.
+- Optional one-tap logging records a preset immediately.
+- Manual editing, notes, undo, extra sets, reorder, and rest timer remain available.
+- One exercise stays on screen at a time with large one-hand controls.
+- Live elapsed time and local-save/sync status.
 - Duplicate-tap protection and atomic local persistence after every action.
 
 ### Offline reliability
@@ -38,7 +40,7 @@ failed-change recovery path.
 - Node.js 22 recommended
 - npm
 - Expo account for EAS cloud builds
-- Gym Crew Supabase project with the committed migration chain applied
+- OVRLD Supabase project with the committed migration chain applied
 - Android Studio only for local native builds or an emulator
 
 ## Configure

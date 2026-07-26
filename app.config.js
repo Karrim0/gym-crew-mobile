@@ -1,26 +1,26 @@
 /** @type {import('expo/config').ExpoConfig} */
 const config = {
-  name: "Gym Crew",
+  name: "OVRLD",
   slug: "kareem-hanafy",
   owner: "kaghim0s-team",
-  version: "1.0.0",
+  version: "1.1.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
-  scheme: "gymcrew",
+  scheme: ["ovrld", "gymcrew"],
   userInterfaceStyle: "automatic",
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.karrim.gymcrew",
-    buildNumber: "8",
+    buildNumber: "9",
     infoPlist: {
       CFBundleAllowMixedLocalizations: true,
     },
   },
   android: {
     package: "com.karrim.gymcrew",
-    versionCode: 8,
+    versionCode: 9,
     adaptiveIcon: {
-      backgroundColor: "#99E61A",
+      backgroundColor: "#090A0D",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
@@ -44,10 +44,10 @@ const config = {
     [
       "expo-splash-screen",
       {
-        backgroundColor: "#080B0C",
-        dark: { backgroundColor: "#070B0D" },
+        backgroundColor: "#090A0D",
+        dark: { backgroundColor: "#090A0D" },
         image: "./assets/images/splash-icon.png",
-        imageWidth: 180,
+        imageWidth: 196,
         resizeMode: "contain",
       },
     ],
@@ -56,7 +56,7 @@ const config = {
       "expo-secure-store",
       {
         configureAndroidBackup: true,
-        faceIDPermission: "Allow Gym Crew to protect your account.",
+        faceIDPermission: "Allow OVRLD to protect your account.",
       },
     ],
     [
