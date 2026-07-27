@@ -3,7 +3,7 @@ const config = {
   name: "OVRLD",
   slug: "kareem-hanafy",
   owner: "kaghim0s-team",
-  version: "1.2.0",
+  version: "1.3.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: ["ovrld", "gymcrew"],
@@ -11,14 +11,14 @@ const config = {
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.karrim.gymcrew",
-    buildNumber: "10",
+    buildNumber: "11",
     infoPlist: {
       CFBundleAllowMixedLocalizations: true,
     },
   },
   android: {
     package: "com.karrim.gymcrew",
-    versionCode: 10,
+    versionCode: 11,
     adaptiveIcon: {
       backgroundColor: "#090A0D",
       foregroundImage: "./assets/images/android-icon-foreground.png",

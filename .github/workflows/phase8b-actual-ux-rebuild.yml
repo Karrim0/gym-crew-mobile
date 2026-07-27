@@ -1,0 +1,36 @@
+name: Phase 8B Actual UX Rebuild
+
+on:
+  push:
+    branches:
+      - phase/8b-actual-ux-rebuild
+  pull_request:
+    branches:
+      - phase/8-product-experience-polish
+      - develop
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run verify:phase8b
+      - run: npm run test:smart-presets
+      - run: npm run verify:phase4
+      - run: npm run verify:phase4-null-safety
+      - run: npm run test:offline-policy
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npx expo install --check
+      - run: npx expo config --type public >/dev/null

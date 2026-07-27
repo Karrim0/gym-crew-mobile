@@ -22,6 +22,7 @@ interface ScreenProps extends ScrollViewProps {
   safeBottom?: boolean;
   showConnectivity?: boolean;
   horizontalPadding?: number;
+  ambient?: boolean;
 }
 
 export function Screen({
@@ -34,6 +35,7 @@ export function Screen({
   safeBottom = true,
   showConnectivity = true,
   horizontalPadding = spacing.md,
+  ambient = true,
   contentContainerStyle,
   ...props
 }: PropsWithChildren<ScreenProps>) {
@@ -48,8 +50,8 @@ export function Screen({
           alignSelf: "center",
           paddingHorizontal: horizontalPadding,
           paddingTop: spacing.xs,
-          paddingBottom: footer ? 112 : spacing.xxl,
-          gap: 14,
+          paddingBottom: footer ? 128 : spacing.xxl,
+          gap: 12,
           minWidth: 0,
         },
         contentStyle,
@@ -62,6 +64,12 @@ export function Screen({
 
   return (
     <SafeAreaView edges={["top", ...(safeBottom ? (["bottom"] as const) : [])]} style={{ flex: 1, backgroundColor: colors.background }}>
+      {ambient ? (
+        <>
+          <View pointerEvents="none" style={{ position: "absolute", width: 250, height: 250, borderRadius: 125, backgroundColor: colors.ambient, top: -150, end: -100 }} />
+          <View pointerEvents="none" style={{ position: "absolute", width: 190, height: 190, borderRadius: 95, backgroundColor: colors.ambient, bottom: 80, start: -130, opacity: 0.5 }} />
+        </>
+      ) : null}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         {scroll ? (
           <ScrollView

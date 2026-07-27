@@ -4,7 +4,7 @@ import { BlurView } from "expo-blur";
 import { radii, spacing } from "@/lib/theme/tokens";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 
-type CardVariant = "default" | "muted" | "glass" | "dark" | "outline";
+type CardVariant = "default" | "raised" | "muted" | "sunken" | "glass" | "dark" | "outline";
 
 interface CardProps extends ViewProps {
   padded?: boolean;
@@ -19,19 +19,23 @@ export function Card({ children, style, padded = true, muted = false, elevated =
   const glass = effective === "glass";
   const backgroundColor = effective === "muted"
     ? colors.surfaceMuted
-    : glass
-      ? colors.surfaceGlass
-      : effective === "dark"
-        ? colors.hero
-        : effective === "outline"
-          ? "transparent"
-          : colors.surface;
+    : effective === "sunken"
+      ? colors.surfaceSunken
+      : effective === "raised"
+        ? colors.surfaceRaised
+        : glass
+          ? colors.surfaceGlass
+          : effective === "dark"
+            ? colors.hero
+            : effective === "outline"
+              ? "transparent"
+              : colors.surface;
   const borderColor = glass
     ? colors.glassBorder
     : effective === "dark" || effective === "outline"
       ? colors.borderStrong
       : colors.border;
-  const hasShadow = elevated || glass;
+  const hasShadow = elevated || effective === "raised" || glass;
 
   return (
     <View
@@ -44,10 +48,10 @@ export function Card({ children, style, padded = true, muted = false, elevated =
           borderRadius: radii.xl,
           padding: padded ? spacing.lg : 0,
           shadowColor: colors.shadow,
-          shadowOpacity: hasShadow ? (resolved === "dark" ? 0.2 : 0.075) : 0,
-          shadowRadius: hasShadow ? 20 : 0,
-          shadowOffset: { width: 0, height: 10 },
-          elevation: hasShadow ? 3 : 0,
+          shadowOpacity: hasShadow ? (resolved === "dark" ? 0.22 : 0.08) : 0,
+          shadowRadius: hasShadow ? 24 : 0,
+          shadowOffset: { width: 0, height: 12 },
+          elevation: hasShadow ? 4 : 0,
           minWidth: 0,
           overflow: "hidden",
         },
@@ -56,9 +60,9 @@ export function Card({ children, style, padded = true, muted = false, elevated =
     >
       {glass ? (
         <>
-          <BlurView pointerEvents="none" intensity={resolved === "dark" ? 24 : 42} tint={resolved} style={StyleSheet.absoluteFill} />
+          <BlurView pointerEvents="none" intensity={resolved === "dark" ? 22 : 46} tint={resolved} style={StyleSheet.absoluteFill} />
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceTint }]} />
-          <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 20, right: 20, height: 1, backgroundColor: colors.glassHighlight }} />
+          <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 18, right: 18, height: 1, backgroundColor: colors.glassHighlight }} />
         </>
       ) : null}
       {children}

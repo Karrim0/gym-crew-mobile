@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0] - 2026-07-27
+
+### Rebuilt
+- Reconstructed the primary screen hierarchy instead of layering more cards onto the Phase 8 layout.
+- Replaced repeated photo-heavy surfaces on Workout, Progress, and Profile with focused native product layouts.
+- Added a calmer raised/sunken surface system and a more compact floating navigation bar for both light and dark themes.
+- Rebuilt Gym Mode around the current set, thumb-reachable actions, a fixed logging button, and direct load/repetition tuning.
+
+### Improved
+- Added explicit `-5`, `-2.5`, `+2.5`, and `+5` kg quick load controls in Gym Mode.
+- Split progressive suggestions into clear “add a rep” and “add weight” states based on the actual recommendation.
+- Made Back-off values editable without leaving the suggestion flow.
+- Reduced visual noise, repeated imagery, oversized hero sections, and low-value copy across Home, Workout, Progress, and Profile.
+- Preserved offline storage, sync behavior, database schema, package identifier, and workout service contracts.
+
 ## [1.2.0] - 2026-07-26
 
 ### Changed

@@ -14,9 +14,10 @@ interface WorkoutValueControlProps {
   max: number;
   onChange: (value: number) => void;
   onEdit: () => void;
+  compact?: boolean;
 }
 
-export function WorkoutValueControl({ label, value, suffix, step, min, max, onChange, onEdit }: WorkoutValueControlProps) {
+export function WorkoutValueControl({ label, value, suffix, step, min, max, onChange, onEdit, compact = false }: WorkoutValueControlProps) {
   const { colors } = useAppTheme();
   const { rowDirection } = useTranslation();
   const current = value ?? min;
@@ -28,11 +29,11 @@ export function WorkoutValueControl({ label, value, suffix, step, min, max, onCh
   return (
     <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
       <AppText variant="overline" color="muted" align="center">{label}</AppText>
-      <View style={{ backgroundColor: colors.surfaceGlass, borderRadius: radii.xl, padding: 7, borderWidth: 1, borderColor: colors.glassBorder, gap: 7 }}>
-        <Pressable accessibilityRole="button" onPress={onEdit} style={({ pressed }) => ({ minHeight: 60, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}>
+      <View style={{ backgroundColor: colors.surfaceSunken, borderRadius: radii.xl, padding: 8, borderWidth: 1, borderColor: colors.border, gap: 8 }}>
+        <Pressable accessibilityRole="button" onPress={onEdit} style={({ pressed }) => ({ minHeight: compact ? 54 : 66, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}>
           <View style={{ flexDirection: rowDirection, alignItems: "flex-end", gap: 5 }}>
-            <AppText variant="metricLarge" numeric align="center" numberOfLines={1}>{value ?? "—"}</AppText>
-            {suffix ? <AppText variant="smallBold" color="muted" style={{ paddingBottom: 7 }}>{suffix}</AppText> : null}
+            <AppText variant={compact ? "metric" : "metricLarge"} numeric align="center" numberOfLines={1}>{value ?? "—"}</AppText>
+            {suffix ? <AppText variant="smallBold" color="muted" style={{ paddingBottom: compact ? 4 : 7 }}>{suffix}</AppText> : null}
           </View>
         </Pressable>
         <View style={{ flexDirection: rowDirection, gap: spacing.xs }}>
