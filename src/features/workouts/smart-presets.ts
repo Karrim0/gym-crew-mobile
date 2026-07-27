@@ -11,6 +11,7 @@ interface BuildSmartSetPresetsInput {
   targetRepsMin: number;
   targetRepsMax: number;
   weightStepKg: number;
+  allowBodyweight?: boolean;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -27,8 +28,9 @@ function presetKey(preset: SmartSetPreset) {
   return `${preset.weightKg ?? "bodyweight"}:${preset.reps}`;
 }
 
-export function buildSmartSetPresets({ baseline, targetRepsMin, targetRepsMax, weightStepKg }: BuildSmartSetPresetsInput): SmartSetPreset[] {
+export function buildSmartSetPresets({ baseline, targetRepsMin, targetRepsMax, weightStepKg, allowBodyweight = false }: BuildSmartSetPresetsInput): SmartSetPreset[] {
   if (!baseline || baseline.reps === null || baseline.reps < 1) return [];
+  if (baseline.weightKg === null && !allowBodyweight) return [];
 
   const min = Math.max(1, Math.min(targetRepsMin, targetRepsMax));
   const max = Math.max(min, targetRepsMax);

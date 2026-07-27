@@ -23,11 +23,11 @@ function requireFile(path, label, maxBytes = Number.POSITIVE_INFINITY) {
 }
 
 if (packageJson.name !== "ovrld-mobile") throw new Error(`Expected package name ovrld-mobile, received ${packageJson.name}`);
-if (packageJson.version !== "1.1.0") throw new Error(`Expected version 1.1.0, received ${packageJson.version}`);
+if (!/^1\.(?:[1-9]|[1-9]\d+)\.\d+$/.test(packageJson.version)) throw new Error(`Expected OVRLD version 1.1.0 or newer, received ${packageJson.version}`);
 if (appConfig.name !== "OVRLD") throw new Error(`Expected app name OVRLD, received ${appConfig.name}`);
-if (appConfig.version !== "1.1.0") throw new Error(`Expected Expo version 1.1.0, received ${appConfig.version}`);
-if (appConfig.android?.versionCode !== 9) throw new Error(`Expected Android versionCode 9, received ${appConfig.android?.versionCode}`);
-if (appConfig.ios?.buildNumber !== "9") throw new Error(`Expected iOS build 9, received ${appConfig.ios?.buildNumber}`);
+if (appConfig.version !== packageJson.version) throw new Error(`Expo/package version mismatch: ${appConfig.version} vs ${packageJson.version}`);
+if ((appConfig.android?.versionCode ?? 0) < 9) throw new Error(`Expected Android versionCode 9 or newer, received ${appConfig.android?.versionCode}`);
+if (Number(appConfig.ios?.buildNumber ?? 0) < 9) throw new Error(`Expected iOS build 9 or newer, received ${appConfig.ios?.buildNumber}`);
 
 for (const dependency of ["@expo-google-fonts/alexandria", "@expo-google-fonts/inter"]) {
   if (packageJson.dependencies?.[dependency] !== "0.4.2") throw new Error(`Expected ${dependency}@0.4.2`);
@@ -71,8 +71,8 @@ const iconSizes = [
   requireFile("assets/images/favicon.png", "favicon", 250_000),
 ];
 
-requireText("android/app/build.gradle", "versionCode 9", "native Android build number");
-requireText("android/app/build.gradle", 'versionName "1.1.0"', "native Android version");
+requireText("android/app/build.gradle", `versionCode ${appConfig.android.versionCode}`, "native Android build number");
+requireText("android/app/build.gradle", `versionName "${packageJson.version}"`, "native Android version");
 
 console.log("OVRLD Phase 7 complete UI rebuild verification");
 console.table({

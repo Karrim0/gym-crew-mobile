@@ -73,6 +73,7 @@ export function ActionSheet({
           style={{ flex: 1 }}
         />
         <Card
+          variant="glass"
           style={{
             borderBottomLeftRadius: 0,
             borderBottomRightRadius: 0,

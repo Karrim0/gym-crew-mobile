@@ -1,7 +1,7 @@
 {
   "name": "ovrld-mobile",
   "main": "expo-router/entry",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "dependencies": {
     "@expo-google-fonts/alexandria": "0.4.2",
     "@expo-google-fonts/inter": "0.4.2",
@@ -83,7 +83,9 @@
     "release:check": "npm run verify:phase6 && npm run test:release-policy && npm run typecheck && npm run lint && npx expo install --check",
     "verify:phase7": "node scripts/verify-phase7-ui-rebuild.mjs",
     "test:smart-presets": "node scripts/run-phase7-smart-presets-tests.mjs",
-    "phase7:check": "npm run verify:phase7 && npm run test:smart-presets && npm run typecheck && npm run lint && npx expo install --check"
+    "phase7:check": "npm run verify:phase7 && npm run test:smart-presets && npm run typecheck && npm run lint && npx expo install --check",
+    "verify:phase8": "node scripts/verify-phase8-product-experience.mjs",
+    "phase8:check": "npm run verify:phase8 && npm run test:smart-presets && npm run verify:phase4 && npm run verify:phase4-null-safety && npm run test:offline-policy && npm run typecheck && npm run lint && npx expo install --check"
   },
   "private": true
 }

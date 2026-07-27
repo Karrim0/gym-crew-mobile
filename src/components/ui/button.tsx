@@ -18,7 +18,7 @@ interface ButtonProps extends PressableProps {
 }
 
 export function Button({ children, variant = "primary", loading = false, icon, trailingIcon, compact = false, disabled, style, onPress, ...props }: PropsWithChildren<ButtonProps>) {
-  const { colors } = useAppTheme();
+  const { colors, resolved } = useAppTheme();
   const { rowDirection } = useTranslation();
   const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
   const background = variant === "primary"
@@ -28,11 +28,12 @@ export function Button({ children, variant = "primary", loading = false, icon, t
       : variant === "success"
         ? colors.success
         : variant === "dark"
-          ? colors.heroMuted
+          ? colors.surfaceGlass
           : variant === "secondary"
             ? colors.surfaceMuted
             : "transparent";
-  const border = variant === "secondary" || variant === "ghost" || variant === "dark" ? colors.borderStrong : "transparent";
+  const outlined = variant === "secondary" || variant === "ghost" || variant === "dark";
+  const border = variant === "dark" ? colors.glassBorder : colors.borderStrong;
   const textColor = variant === "primary"
     ? colors.primaryInk
     : variant === "danger" || variant === "success"
@@ -51,7 +52,7 @@ export function Button({ children, variant = "primary", loading = false, icon, t
       {...props}
       style={({ pressed }) => [
         {
-          minHeight: compact ? 46 : 56,
+          minHeight: compact ? 44 : 54,
           borderRadius: compact ? radii.md : radii.lg,
           paddingHorizontal: compact ? spacing.md : spacing.lg,
           alignItems: "center",
@@ -60,10 +61,15 @@ export function Button({ children, variant = "primary", loading = false, icon, t
           gap: spacing.sm,
           backgroundColor: background,
           borderColor: border,
-          borderWidth: variant === "secondary" || variant === "ghost" || variant === "dark" ? 1 : 0,
-          opacity: disabled ? 0.38 : pressed ? 0.78 : 1,
+          borderWidth: outlined ? 1 : 0,
+          opacity: disabled ? 0.38 : pressed ? 0.8 : 1,
           transform: [{ scale: pressed && !disabled ? 0.985 : 1 }],
           minWidth: 0,
+          shadowColor: colors.shadow,
+          shadowOpacity: variant === "primary" ? (resolved === "dark" ? 0.26 : 0.12) : 0,
+          shadowRadius: variant === "primary" ? 13 : 0,
+          shadowOffset: { width: 0, height: 7 },
+          elevation: variant === "primary" ? 2 : 0,
         },
         typeof style === "function" ? style({ pressed }) : style,
       ]}

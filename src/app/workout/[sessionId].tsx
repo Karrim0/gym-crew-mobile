@@ -54,6 +54,8 @@ import {
 import { friendlyError } from "@/lib/supabase/errors";
 import { buildSmartSetPresets, type SmartSetPreset } from "@/features/workouts/smart-presets";
 import { muscleVisual } from "@/lib/brand/workout-visuals";
+import { isLikelyBodyweightExercise, muscleLabel } from "@/lib/product/exercise-copy";
+import { setPraise, workoutPraise } from "@/lib/product/encouragement";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
 import { spacing } from "@/lib/theme/tokens";
@@ -71,6 +73,7 @@ interface LoggedSetSummary {
   weight: number | null;
   reps: number;
   hasNextPlannedSet: boolean;
+  praise: string;
 }
 
 function completedCount(exercise: WorkoutExerciseWithDetails) {
@@ -114,7 +117,7 @@ export default function GymModeScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [weight, setWeight] = useState<number | null>(null);
   const [reps, setReps] = useState<number | null>(null);
-  const [weightStep, setWeightStep] = useState(2.5);
+  const [weightStep, setWeightStep] = useState(() => settings.weightUnit === "kg" ? settings.defaultWeightStepKg : settings.defaultWeightStepKg === 5 ? 10 : 5);
   const [setNotes, setSetNotes] = useState("");
   const [manualEntryOpen, setManualEntryOpen] = useState(true);
   const [selectedPresetKind, setSelectedPresetKind] = useState<SmartSetPreset["kind"] | null>(null);
@@ -169,13 +172,15 @@ export default function GymModeScreen() {
     setSetNotes(pending?.notes ?? "");
     void AsyncStorage.getItem(`gym-crew:weight-step:${settings.weightUnit}:${exercise.exerciseId}`).then((stored) => {
       const parsed = Number(stored);
-      if ([0.5, 1, 2, 2.5, 5, 10].includes(parsed)) setWeightStep(parsed);
+      const allowed = settings.weightUnit === "kg" ? [2.5, 5] : [5, 10];
+      const fallback = settings.weightUnit === "kg" ? settings.defaultWeightStepKg : settings.defaultWeightStepKg === 5 ? 10 : 5;
+      setWeightStep(allowed.includes(parsed) ? parsed : fallback);
     });
     if (!sourceSession.exercises.some((item) => item.id === exercise.id)) {
       selectedIdRef.current = null;
       setSelectedId(null);
     }
-  }, [settings.weightUnit]);
+  }, [settings.defaultWeightStepKg, settings.weightUnit]);
 
   const load = useCallback(async () => {
     if (!sessionId || !user) return;
@@ -216,12 +221,14 @@ export default function GymModeScreen() {
     : undefined;
   const strongestPast = useMemo(() => past ? bestSet(past.sets) : undefined, [past]);
   const latestCompletedSet = useMemo(() => selected?.sets.filter((set) => set.isCompleted).at(-1), [selected]);
+  const selectedIsBodyweight = selected ? isLikelyBodyweightExercise(selected.exercise.name) : false;
   const smartPresets = useMemo(() => buildSmartSetPresets({
     baseline: previousTargetSet ?? latestCompletedSet ?? strongestPast,
     targetRepsMin: selected?.targetRepsMin ?? 1,
     targetRepsMax: selected?.targetRepsMax ?? 1,
     weightStepKg: toKilograms(weightStep, settings.weightUnit) ?? 2.5,
-  }), [latestCompletedSet, previousTargetSet, selected?.targetRepsMax, selected?.targetRepsMin, settings.weightUnit, strongestPast, weightStep]);
+    allowBodyweight: selectedIsBodyweight,
+  }), [latestCompletedSet, previousTargetSet, selected?.targetRepsMax, selected?.targetRepsMin, selectedIsBodyweight, settings.weightUnit, strongestPast, weightStep]);
 
   function moveDraft(index: number, direction: -1 | 1) {
     const target = index + direction;
@@ -261,7 +268,7 @@ export default function GymModeScreen() {
     });
   }
 
-  async function logSet(override?: { weightKg: number | null; reps: number }) {
+  async function logSet(override?: { weightKg: number | null; reps: number; presetKind?: SmartSetPreset["kind"] }) {
     const nextWeight = override?.weightKg ?? weight;
     const nextReps = override?.reps ?? reps;
     if (!session || !selected || !pendingSet || nextReps === null || savingRef.current) return;
@@ -275,6 +282,7 @@ export default function GymModeScreen() {
           weight: nextWeight,
           reps: nextReps,
           hasNextPlannedSet: Boolean(refreshedExercise?.sets.some((set) => !set.isCompleted)),
+          praise: setPraise(language, override?.presetKind ?? "manual"),
         });
         setSelectedPresetKind(null);
         await timer.start(settings.defaultRestSeconds, refreshedExercise?.exercise.name ?? selected.exercise.name, `/workout/${session.id}`);
@@ -287,7 +295,7 @@ export default function GymModeScreen() {
     setWeight(preset.weightKg);
     setReps(preset.reps);
     setSelectedPresetKind(preset.kind);
-    if (settings.oneTapLoggingEnabled) void logSet({ weightKg: preset.weightKg, reps: preset.reps });
+    if (settings.oneTapLoggingEnabled) void logSet({ weightKg: preset.weightKg, reps: preset.reps, presetKind: preset.kind });
   }
 
   async function undoLastSet() {
@@ -403,7 +411,8 @@ export default function GymModeScreen() {
   const noteOptions = language === "ar"
     ? ["سهل", "مناسب", "صعب", "زوّد الوزن المرة الجاية", "خفف الوزن", "راجع التكنيك"]
     : ["Easy", "Good", "Hard", "Increase next time", "Reduce weight", "Review technique"];
-  const elapsedSeconds = Math.max(0, Math.floor((clockNow - new Date(session.startedAt).getTime()) / 1000));
+  const elapsedRaw = Math.max(0, Math.floor((clockNow - new Date(session.startedAt).getTime()) / 1000));
+  const elapsedSeconds = elapsedRaw <= 8 * 60 * 60 ? elapsedRaw : 0;
   const dataStatus = networkStatus === "offline"
     ? language === "ar" ? "محفوظ على الجهاز" : "Saved on device"
     : syncing
@@ -417,9 +426,8 @@ export default function GymModeScreen() {
 
   return (
     <Screen
-      scroll={false}
       showConnectivity={false}
-      contentStyle={{ flex: 1, paddingTop: spacing.xs, paddingBottom: spacing.sm, gap: compact ? 10 : spacing.sm }}
+      contentStyle={{ paddingTop: spacing.xs, paddingBottom: spacing.xl, gap: compact ? 10 : spacing.sm }}
     >
       <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm }}>
         <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "العودة للتمرين" : "Back to workout"} onPress={() => router.replace("/(tabs)/workout")} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}>
@@ -427,7 +435,7 @@ export default function GymModeScreen() {
         </Pressable>
         <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
           <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between" }}>
-            <AppText variant="overline" color="primary">GYM MODE</AppText>
+            <AppText variant="overline" color="primary">{language === "ar" ? "وضع التمرين" : "GYM MODE"}</AppText>
             <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 8 }}>
               <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 4 }}>
                 <Clock3 color={colors.textMuted} size={13} />
@@ -437,6 +445,7 @@ export default function GymModeScreen() {
             </View>
           </View>
           <ProgressBar value={progress} />
+          <AppText variant="caption" color="muted" numberOfLines={1}>{workoutPraise(language, completedSets, totalSets)}</AppText>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "أدوات التمرينة" : "Workout tools"} onPress={() => setMoreOpen(true)} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}>
           <MoreHorizontal color={colors.text} size={22} />
@@ -452,7 +461,7 @@ export default function GymModeScreen() {
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <AppText variant={compact ? "title3" : "title2"} style={{ color: colors.textOnDark }} numberOfLines={2}>{selected.exercise.name}</AppText>
-            <AppText variant="small" style={{ color: colors.textMuted }} numberOfLines={1}>{selected.exercise.primaryMuscle} · {selectedIndex + 1}/{session.exercises.length}</AppText>
+            <AppText variant="small" style={{ color: colors.textOnDarkMuted }} numberOfLines={1}>{muscleLabel(selected.exercise.primaryMuscle, language)} · {selectedIndex + 1}/{session.exercises.length}</AppText>
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "قائمة تمارين اليوم" : "Today’s exercise list"} onPress={() => setExerciseListOpen(true)} style={({ pressed }) => ({ width: 42, height: 42, borderRadius: 15, backgroundColor: colors.heroMuted, borderWidth: 1, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}>
             <ListChecks color={colors.textOnDark} size={19} />
@@ -462,29 +471,28 @@ export default function GymModeScreen() {
         <View style={{ flexDirection: rowDirection, gap: 8, flexWrap: "wrap" }}>
           <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.primary }}><AppText variant="caption" style={{ color: colors.primaryInk }}>{pendingSet ? (language === "ar" ? `سِت ${pendingSet.setNumber} من ${selected.sets.length}` : `Set ${pendingSet.setNumber}/${selected.sets.length}`) : (language === "ar" ? "اكتمل" : "Done")}</AppText></View>
           <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.heroMuted }}><AppText variant="caption" style={{ color: colors.textOnDark }}>{selected.targetRepsMin}–{selected.targetRepsMax} {language === "ar" ? "عدة" : "reps"}</AppText></View>
-          {strongestPast ? <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.heroMuted, flexDirection: rowDirection, alignItems: "center", gap: 5 }}><History size={13} color={colors.primary} /><AppText variant="caption" style={{ color: colors.textOnDark }}>{formatWeight(strongestPast.weightKg, settings.weightUnit)} × {strongestPast.reps}</AppText></View> : null}
+          {strongestPast && (strongestPast.weightKg !== null || selectedIsBodyweight) ? <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.heroMuted, flexDirection: rowDirection, alignItems: "center", gap: 5 }}><History size={13} color={colors.primary} /><AppText variant="caption" style={{ color: colors.textOnDark }}>{formatWeight(strongestPast.weightKg, settings.weightUnit)} × {strongestPast.reps}</AppText></View> : null}
         </View>
 
-        <View
-          accessibilityLiveRegion="polite"
-          style={{ flexDirection: rowDirection, alignItems: "center", gap: 6, alignSelf: "flex-start" }}
-        >
-          <DataIcon size={14} color={networkStatus === "offline" ? colors.warning : colors.primary} />
-          <AppText variant="caption" style={{ color: networkStatus === "offline" ? colors.warning : colors.textMuted }}>{dataStatus}</AppText>
-        </View>
+        {networkStatus === "offline" || pendingSync > 0 || syncing ? (
+          <View accessibilityLiveRegion="polite" style={{ flexDirection: rowDirection, alignItems: "center", gap: 6, alignSelf: "flex-start" }}>
+            <DataIcon size={14} color={networkStatus === "offline" ? colors.warning : colors.primary} />
+            <AppText variant="caption" style={{ color: networkStatus === "offline" ? colors.warning : colors.textMuted }}>{dataStatus}</AppText>
+          </View>
+        ) : null}
 
       </Card>
 
-      <Card style={{ flex: 1, minHeight: 0, justifyContent: "space-between", gap: compact ? 10 : spacing.sm, padding: compact ? 14 : 16 }}>
+      <Card variant="glass" style={{ gap: compact ? 10 : spacing.sm, padding: compact ? 14 : 16 }}>
         {lastLogged ? (
           <>
             <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm, backgroundColor: colors.successSoft, borderRadius: 17, padding: 12 }}>
               <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={21} /></View>
-              <View style={{ flex: 1 }}><AppText variant="smallBold">{language === "ar" ? "اتسجلت" : "Logged"}</AppText><AppText variant="small" color="muted">{formatWeight(lastLogged.weight, settings.weightUnit)} × {lastLogged.reps}</AppText></View>
+              <View style={{ flex: 1 }}><AppText variant="smallBold">{lastLogged.praise}</AppText><AppText variant="small" color="muted">{lastLogged.weight === null && language === "ar" ? "وزن الجسم" : formatWeight(lastLogged.weight, settings.weightUnit)} × {lastLogged.reps}</AppText></View>
               <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "تراجع عن آخر سِت" : "Undo last set"} onPress={() => void undoLastSet()} style={({ pressed }) => ({ padding: 8, opacity: pressed ? 0.65 : 1 })}><RotateCcw size={18} color={colors.primaryStrong} /></Pressable>
             </View>
 
-            <View style={{ flex: 1, justifyContent: "center", gap: 10 }}>
+            <View style={{ paddingVertical: 8, gap: 10 }}>
               <AppText variant="title2" align="center">{lastLogged.hasNextPlannedSet ? (language === "ar" ? "سِت كمان؟" : "Another set?") : (language === "ar" ? "خلصت المطلوب" : "Target complete")}</AppText>
               {timer.active ? (
                 <Pressable onPress={() => setTimerOpen(true)} style={({ pressed }) => ({ alignSelf: "center", minHeight: 42, paddingHorizontal: 14, borderRadius: 14, backgroundColor: colors.primarySofter, borderWidth: 1, borderColor: colors.primarySoft, flexDirection: rowDirection, alignItems: "center", gap: 7, opacity: pressed ? 0.7 : 1 })}>
@@ -502,13 +510,13 @@ export default function GymModeScreen() {
         ) : pendingSet ? (
           smartPresets.length > 0 && !manualEntryOpen ? (
             <>
-              <View style={{ flex: 1, justifyContent: "center", gap: compact ? 9 : 12 }}>
+              <View style={{ gap: compact ? 9 : 12 }}>
                 <View style={{ gap: 3 }}>
-                  <AppText variant="title3">{language === "ar" ? "اختار السِت واضغط" : "Pick your set"}</AppText>
+                  <AppText variant="title3">{language === "ar" ? "اختار اللي لعبته" : "Pick what you did"}</AppText>
                   <AppText variant="small" color="muted">
                     {settings.oneTapLoggingEnabled
-                      ? (language === "ar" ? "الضغطة هتسجّل السِت فورًا." : "Your tap logs the set instantly.")
-                      : (language === "ar" ? "اختار اقتراح وبعدها أكّد التسجيل." : "Choose a preset, then confirm it.")}
+                      ? (language === "ar" ? "ضغطة واحدة وهتتحفظ فورًا." : "One tap saves it instantly.")
+                      : (language === "ar" ? "اختار الرقم وبعدها أكّد." : "Choose a number, then confirm.")}
                   </AppText>
                 </View>
 
@@ -516,15 +524,15 @@ export default function GymModeScreen() {
                   {smartPresets.map((preset) => {
                     const selectedPreset = preset.kind === selectedPresetKind;
                     const title = preset.kind === "repeat"
-                      ? (language === "ar" ? "نفس الأداء" : "Repeat")
+                      ? (language === "ar" ? "نفس الرقم" : "Repeat")
                       : preset.kind === "progress"
-                        ? (language === "ar" ? "تقدّم" : "Progress")
-                        : (language === "ar" ? "Back-off" : "Back-off");
+                        ? (language === "ar" ? "زوّد" : "Progress")
+                        : (language === "ar" ? "خفّ الوزن" : "Back-off");
                     const description = preset.kind === "repeat"
-                      ? (language === "ar" ? "آخر اختيار ناجح" : "Your last successful choice")
+                      ? (language === "ar" ? "نفس آخر سِت ناجحة" : "Match your last successful set")
                       : preset.kind === "progress"
-                        ? (language === "ar" ? "زيادة محسوبة داخل الرينج" : "A measured step inside the range")
-                        : (language === "ar" ? "وزن أخف وعدات أكتر" : "Less load, more reps");
+                        ? (language === "ar" ? "عدة زيادة أو نقلة وزن" : "One more rep or a load jump")
+                        : (language === "ar" ? "وزن أقل وتحكم أحسن" : "Less load, more control");
                     return (
                       <Pressable
                         key={preset.kind}
@@ -552,7 +560,7 @@ export default function GymModeScreen() {
                           <AppText variant="caption" color="muted" numberOfLines={1}>{description}</AppText>
                         </View>
                         <View style={{ alignItems: "flex-end" }}>
-                          <AppText variant="title3" numeric color={selectedPreset ? "primary" : "default"}>{preset.weightKg === null ? "BW" : formatWeight(preset.weightKg, settings.weightUnit)}</AppText>
+                          <AppText variant="title3" numeric color={selectedPreset ? "primary" : "default"}>{preset.weightKg === null ? (language === "ar" ? "وزن الجسم" : "BW") : formatWeight(preset.weightKg, settings.weightUnit)}</AppText>
                           <AppText variant="smallBold" numeric color="muted">× {preset.reps}</AppText>
                         </View>
                       </Pressable>
@@ -562,21 +570,21 @@ export default function GymModeScreen() {
 
                 <Pressable onPress={() => { setManualEntryOpen(true); setSelectedPresetKind(null); }} style={({ pressed }) => ({ alignSelf: "center", flexDirection: rowDirection, alignItems: "center", gap: 6, padding: 8, opacity: pressed ? 0.62 : 1 })}>
                   <PenLine size={15} color={colors.textMuted} />
-                  <AppText variant="smallBold" color="muted">{language === "ar" ? "تعديل يدوي" : "Manual edit"}</AppText>
+                  <AppText variant="smallBold" color="muted">{language === "ar" ? "ظبط الوزن والعدات" : "Adjust weight and reps"}</AppText>
                 </Pressable>
               </View>
 
               {!settings.oneTapLoggingEnabled && chosenPreset ? (
-                <Button loading={saving} onPress={() => void logSet({ weightKg: chosenPreset.weightKg, reps: chosenPreset.reps })} icon={<Check color={colors.primaryInk} size={22} />} style={{ minHeight: compact ? 60 : 66 }}>
+                <Button loading={saving} onPress={() => void logSet({ weightKg: chosenPreset.weightKg, reps: chosenPreset.reps, presetKind: chosenPreset.kind })} icon={<Check color={colors.primaryInk} size={22} />} style={{ minHeight: compact ? 60 : 66 }}>
                   {language === "ar" ? "سجّل الاختيار" : "Log selected set"}
                 </Button>
               ) : null}
             </>
           ) : (
             <>
-              <View style={{ flex: 1, justifyContent: "center", gap: compact ? 9 : 13 }}>
+              <View style={{ gap: compact ? 9 : 13 }}>
                 <View style={{ gap: 3 }}>
-                  <AppText variant="title3">{smartPresets.length ? (language === "ar" ? "عدّل السِت" : "Edit this set") : (language === "ar" ? "ثبّت أول أرقامك" : "Set your starting numbers")}</AppText>
+                  <AppText variant="title3">{smartPresets.length ? (language === "ar" ? "ظبط السِت" : "Adjust this set") : (language === "ar" ? "سجّل أول أرقامك" : "Log your starting numbers")}</AppText>
                   <AppText variant="small" color="muted">{smartPresets.length ? (language === "ar" ? "التعديل ده هيدخل في اقتراحاتك الجاية." : "This edit improves your next suggestions.") : (language === "ar" ? "من المرة الجاية هتلاقي اختيارات جاهزة للضغط." : "Next time, you will get tap-ready presets.")}</AppText>
                 </View>
 
@@ -586,9 +594,9 @@ export default function GymModeScreen() {
                 </View>
 
                 <View style={{ flexDirection: rowDirection, gap: 7, alignItems: "center" }}>
-                  {(settings.weightUnit === "lb" ? [2.5, 5, 10] : [1, 2.5, 5]).map((step) => (
+                  {(settings.weightUnit === "lb" ? [5, 10] : [2.5, 5]).map((step) => (
                     <Pressable key={step} onPress={() => { setWeightStep(step); void AsyncStorage.setItem(`gym-crew:weight-step:${settings.weightUnit}:${selected.exerciseId}`, String(step)); }} style={({ pressed }) => ({ minHeight: 38, paddingHorizontal: 11, borderRadius: 13, backgroundColor: weightStep === step ? colors.primarySoft : colors.surfaceMuted, borderWidth: 1, borderColor: weightStep === step ? colors.primary : colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}>
-                      <AppText variant="caption" color={weightStep === step ? "primary" : "muted"}>±{step}</AppText>
+                      <AppText variant="caption" color={weightStep === step ? "primary" : "muted"}>±{step} {settings.weightUnit}</AppText>
                     </Pressable>
                   ))}
                   <Pressable onPress={() => setNotesOpen(true)} style={({ pressed }) => ({ flex: 1, minHeight: 38, borderRadius: 13, backgroundColor: setNotes ? colors.primarySoft : colors.surfaceMuted, borderWidth: 1, borderColor: setNotes ? colors.primary : colors.border, paddingHorizontal: 11, flexDirection: rowDirection, alignItems: "center", justifyContent: "center", gap: 6, opacity: pressed ? 0.72 : 1 })}>
@@ -605,16 +613,16 @@ export default function GymModeScreen() {
             </>
           )
         ) : (
-          <View style={{ flex: 1, justifyContent: "center", gap: spacing.md, alignItems: "center" }}>
+          <View style={{ paddingVertical: spacing.xl, gap: spacing.md, alignItems: "center" }}>
             <View style={{ width: 62, height: 62, borderRadius: 22, backgroundColor: colors.successSoft, alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={32} /></View>
-            <AppText variant="title2" align="center">{language === "ar" ? "التمرين ده خلص" : "Exercise complete"}</AppText>
+            <AppText variant="title2" align="center">{language === "ar" ? "فحل — التمرين ده خلص" : "Strong — exercise complete"}</AppText>
             <Button style={{ alignSelf: "stretch" }} onPress={goNextExercise}>{selectedIndex === session.exercises.length - 1 ? (language === "ar" ? "إنهاء التمرينة" : "Finish workout") : (language === "ar" ? "التمرين التالي" : "Next exercise")}</Button>
             <Button style={{ alignSelf: "stretch" }} variant="secondary" onPress={() => void addExtraSet()}>{language === "ar" ? "سِت زيادة" : "Extra set"}</Button>
           </View>
         )}
       </Card>
 
-      <ActionSheet visible={preflightOpen} title={language === "ar" ? "نبدأ زي ما هي؟" : "Start as planned?"} description={language === "ar" ? "لو جهاز مشغول غيّر الترتيب في ثواني." : "If a machine is busy, reorder in seconds."} onClose={() => setPreflightOpen(false)} dismissible={false}>
+      <ActionSheet visible={preflightOpen} title={language === "ar" ? "نبدأ بالترتيب ده؟" : "Start in this order?"} description={language === "ar" ? "لو جهاز مشغول غيّر الترتيب بسرعة." : "If a machine is busy, reorder quickly."} onClose={() => setPreflightOpen(false)} dismissible={false}>
         <Button onPress={() => setPreflightOpen(false)} icon={<Check color={colors.primaryInk} size={20} />}>{language === "ar" ? "ابدأ بالترتيب الحالي" : "Use current order"}</Button>
         <Button variant="secondary" onPress={openReorder} icon={<Shuffle color={colors.primaryStrong} size={19} />}>{language === "ar" ? "رتّب تمرينة النهارده" : "Reorder today"}</Button>
       </ActionSheet>

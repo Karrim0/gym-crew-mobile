@@ -29,7 +29,12 @@ test("backoff rounds to the available plate step", () => {
   assert.deepEqual(presets.find((preset) => preset.kind === "backoff"), { kind: "backoff", weightKg: 72.5, reps: 11 });
 });
 
-test("bodyweight presets preserve a null load", () => {
+test("non-bodyweight exercises with a missing load return to manual entry", () => {
   const presets = buildSmartSetPresets({ baseline: { weightKg: null, reps: 8 }, targetRepsMin: 8, targetRepsMax: 15, weightStepKg: 2.5 });
+  assert.deepEqual(presets, []);
+});
+
+test("bodyweight presets preserve a null load when explicitly allowed", () => {
+  const presets = buildSmartSetPresets({ baseline: { weightKg: null, reps: 8 }, targetRepsMin: 8, targetRepsMax: 15, weightStepKg: 2.5, allowBodyweight: true });
   assert.equal(presets.every((preset) => preset.weightKg === null), true);
 });

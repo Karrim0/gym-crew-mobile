@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
@@ -34,10 +34,10 @@ import { useTranslation } from "@/lib/localization/use-translation";
 import { useSessionStore } from "@/stores/session-store";
 import type { WeeklyScheduleDayWithDetails, WorkoutSessionWithDetails } from "@/types";
 
-function Metric({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+function Metric({ icon, value, label }: { icon: ReactNode; value: string; label: string }) {
   const { colors } = useAppTheme();
   return (
-    <View style={{ flex: 1, minWidth: 0, gap: 5, padding: 14, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+    <View style={{ flex: 1, minWidth: 0, gap: 5, padding: 12, borderRadius: 18, backgroundColor: colors.surfaceGlass, borderWidth: 1, borderColor: colors.glassBorder }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>{icon}<AppText variant="caption" color="muted" numberOfLines={1}>{label}</AppText></View>
       <AppText variant="metric" numeric>{value}</AppText>
     </View>
@@ -111,10 +111,10 @@ export default function HomeScreen() {
   if (error && !schedule.length) return <Screen><ErrorState message={error} onRetry={() => void load()} /></Screen>;
 
   const title = active
-    ? (language === "ar" ? "كمّل تمرينتك" : "Finish what you started")
+    ? (language === "ar" ? "كمّل من مكانك" : "Continue where you left off")
     : rest
       ? (language === "ar" ? "استشفاء النهارده" : "Recovery today")
-      : today?.displayName ?? (language === "ar" ? "ابنِ أول أسبوع" : "Build your first week");
+      : today?.displayName ?? (language === "ar" ? "جهّز أول أسبوع" : "Set up your first week");
 
   const meta = active
     ? `${formatShortDate(active.scheduledDate, language)} · ${activeCompletedSets}/${activeTotalSets} ${t("common.sets")}`
@@ -126,16 +126,16 @@ export default function HomeScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)} horizontalPadding={16}>
-      <AppHeader title={language === "ar" ? `أهلاً، ${profile?.displayName || "بطل"}` : `Hi, ${profile?.displayName || "Athlete"}`} subtitle={language === "ar" ? "النهارده فرصة تزود رقم." : "Today is a chance to move one number forward."} />
+      <AppHeader title={language === "ar" ? `أهلاً، ${profile?.displayName || "بطل"}` : `Hi, ${profile?.displayName || "Athlete"}`} subtitle={language === "ar" ? "جاهز للرقم اللي بعده؟" : "Ready to move the next number?"} />
 
       <PhotoHero
         source={workoutVisual(today?.workoutType)}
-        height={300}
-        topRight={<View style={{ paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, backgroundColor: "rgba(9,10,13,0.76)", borderWidth: 1, borderColor: colors.borderStrong }}><AppText variant="caption" color="primary">{language === "ar" ? "خطة النهارده" : "TODAY"}</AppText></View>}
+        height={268}
+        topRight={<View style={{ paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, backgroundColor: "rgba(9,10,13,0.76)", borderWidth: 1, borderColor: colors.borderStrong }}><AppText variant="caption" color="primary">{language === "ar" ? "النهارده" : "TODAY"}</AppText></View>}
       >
         <View style={{ gap: 10 }}>
           <AppText variant="hero" style={{ color: colors.textOnDark }} numberOfLines={2}>{title}</AppText>
-          <AppText variant="small" style={{ color: colors.textMuted }}>{meta}</AppText>
+          <AppText variant="small" style={{ color: colors.textOnDarkMuted }}>{meta}</AppText>
           {active ? <ProgressBar value={(activeCompletedSets / Math.max(1, activeTotalSets)) * 100} /> : null}
           {active ? (
             <Button icon={<RotateCcw color={colors.primaryInk} size={20} />} onPress={() => router.push(`/workout/${active.id}`)}>{language === "ar" ? "كمّل من مكانك" : "Continue workout"}</Button>
@@ -156,18 +156,18 @@ export default function HomeScreen() {
         <Metric icon={<TrendingUp color={colors.success} size={16} />} value={`${weeklyPercent}%`} label={language === "ar" ? "التزام" : "Adherence"} />
       </View>
 
-      <Card style={{ gap: spacing.lg }}>
+      <Card variant="glass" style={{ gap: spacing.lg }}>
         <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between" }}>
-          <View><AppText variant="title3">{language === "ar" ? "نبض الأسبوع" : "Week pulse"}</AppText><AppText variant="small" color="muted">{language === "ar" ? `${weekHistory.length} من ${plannedDays || 0} أيام مخططة` : `${weekHistory.length} of ${plannedDays || 0} planned days`}</AppText></View>
+          <View><AppText variant="title3">{language === "ar" ? "أسبوعك" : "Your week"}</AppText><AppText variant="small" color="muted">{language === "ar" ? `${weekHistory.length} من ${plannedDays || 0} أيام مخططة` : `${weekHistory.length} of ${plannedDays || 0} planned days`}</AppText></View>
           <Pressable onPress={() => router.push("/(tabs)/progress")} style={({ pressed }) => ({ flexDirection: rowDirection, alignItems: "center", gap: 4, opacity: pressed ? 0.6 : 1 })}><AppText variant="smallBold" color="primary">{language === "ar" ? "التفاصيل" : "Details"}</AppText><Arrow size={17} color={colors.primary} /></Pressable>
         </View>
         <WeekStrip schedule={schedule} sessions={weekHistory} />
       </Card>
 
       <Pressable onPress={() => router.push("/(tabs)/split")} style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}>
-        <Card variant="outline" elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
+        <Card variant="glass" elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
           <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primarySofter, alignItems: "center", justifyContent: "center" }}><Layers3 color={colors.primaryStrong} size={22} /></View>
-          <View style={{ flex: 1, minWidth: 0 }}><AppText variant="bodyStrong">{language === "ar" ? "خطتك التدريبية" : "Training plan"}</AppText><AppText variant="small" color="muted">{language === "ar" ? "عدّل الأيام والتمارين والأهداف" : "Edit days, exercises, and targets"}</AppText></View>
+          <View style={{ flex: 1, minWidth: 0 }}><AppText variant="bodyStrong">{language === "ar" ? "جدولك" : "Your plan"}</AppText><AppText variant="small" color="muted">{language === "ar" ? "الأيام والتمارين والعدات" : "Days, exercises, and rep targets"}</AppText></View>
           <Arrow color={colors.textFaint} size={19} />
         </Card>
       </Pressable>

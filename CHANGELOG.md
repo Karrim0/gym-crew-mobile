@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0] - 2026-07-26
+
+### Changed
+- Rebuilt the shared light/dark visual hierarchy around calmer warm neutrals and restrained Ember accents.
+- Added glass navigation, cards, and action sheets with Android-safe fallback surfaces.
+- Restructured Home, Workout, Progress, Profile, and Crew for clearer information hierarchy.
+- Made Gym Mode scroll-safe and removed the stretched empty interaction area.
+- Added direct 2.5 kg / 5 kg load-jump controls and a persistent default jump setting.
+- Added Egyptian gym praise and crew ranking copy.
+
+### Fixed
+- Prevented non-bodyweight exercises such as Bench Press from receiving false `BW` smart presets.
+- Sanitized implausible legacy workout durations before displaying history and weekly totals.
+- Removed duplicate language controls from Settings.
+
 ## 1.1.0 — OVRLD UI Rebuild
 
 ### Brand

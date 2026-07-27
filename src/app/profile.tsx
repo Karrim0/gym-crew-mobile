@@ -101,7 +101,7 @@ export default function ProfileScreen() {
           <Avatar name={profile.displayName} url={profile.avatarUrl} size={104} ring />
           <View style={{ position: "absolute", bottom: 0, right: 0, width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, borderWidth: 3, borderColor: colors.hero, alignItems: "center", justifyContent: "center" }}><Camera size={16} color={colors.primaryInk} /></View>
         </Pressable>
-        <View style={{ alignItems: "center", gap: 2 }}><AppText variant="title2" style={{ color: colors.textOnDark }} align="center">{profile.displayName}</AppText><AppText style={{ color: colors.textMuted }} align="center">{user?.email}</AppText></View>
+        <View style={{ alignItems: "center", gap: 2 }}><AppText variant="title2" style={{ color: colors.textOnDark }} align="center">{profile.displayName}</AppText><AppText style={{ color: colors.textOnDarkMuted }} align="center">{user?.email}</AppText></View>
         <Button compact variant="dark" loading={uploading} onPress={() => void pickAvatar()}>{language === "ar" ? "غيّر الصورة" : "Change photo"}</Button>
       </Card>
 

@@ -22,7 +22,7 @@ export function AuthShell({ children }: PropsWithChildren) {
           <AppText variant="hero" style={{ color: colors.textOnDark }}>
             {language === "ar" ? "تدرّب بأرقام.\nاتقدّم بوضوح." : "Train by numbers.\nProgress on purpose."}
           </AppText>
-          <AppText variant="small" style={{ color: colors.textMuted }}>
+          <AppText variant="small" style={{ color: colors.textOnDarkMuted }}>
             {language === "ar" ? "جدولك، أوزانك، وتقدمك محفوظين حتى من غير نت." : "Your plan, loads, and progress stay safe—even offline."}
           </AppText>
         </View>

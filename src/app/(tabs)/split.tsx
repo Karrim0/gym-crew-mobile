@@ -132,7 +132,7 @@ export default function SplitScreen() {
                 { value: summary.training, label: language === "ar" ? "أيام تمرين" : "Training" },
                 { value: summary.exercises, label: language === "ar" ? "تمرين" : "Exercises" },
                 { value: summary.sets, label: language === "ar" ? "سِت أسبوعي" : "Weekly sets" },
-              ].map((item) => <View key={item.label} style={{ flex: 1, backgroundColor: colors.heroMuted, borderRadius: 17, padding: 12, gap: 3 }}><AppText variant="title3" style={{ color: colors.textOnDark }}>{item.value}</AppText><AppText variant="caption" style={{ color: colors.textMuted }}>{item.label}</AppText></View>)}
+              ].map((item) => <View key={item.label} style={{ flex: 1, backgroundColor: colors.heroMuted, borderRadius: 17, padding: 12, gap: 3 }}><AppText variant="title3" style={{ color: colors.textOnDark }}>{item.value}</AppText><AppText variant="caption" style={{ color: colors.textOnDarkMuted }}>{item.label}</AppText></View>)}
             </View>
             <View style={{ flexDirection: rowDirection, gap: 8 }}>
               <Button compact style={{ flex: 1 }} variant="dark" onPress={openWeekOrder}>{language === "ar" ? "رتّب الأيام" : "Reorder"}</Button>

@@ -13,6 +13,7 @@ import {
   MousePointerClick,
   RefreshCw,
   Scale,
+  Gauge,
   Smartphone,
   Sun,
   ShieldAlert,
@@ -112,24 +113,24 @@ export default function SettingsScreen() {
     <Screen>
       <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm }}>
         <IconButton onPress={() => router.back()} icon={isRTL ? <ChevronLeft color={colors.text} /> : <ArrowLeft color={colors.text} />} />
-        <View style={{ flex: 1 }}><AppText variant="title2">{t("settings.title")}</AppText><AppText variant="small" color="muted">{language === "ar" ? "ظبط التطبيق على طريقتك." : "Make the app work your way."}</AppText></View>
+        <View style={{ flex: 1 }}><AppText variant="title2">{t("settings.title")}</AppText><AppText variant="small" color="muted">{language === "ar" ? "ظبط التمرين على طريقتك." : "Make the app work your way."}</AppText></View>
       </View>
 
-      <Card style={{ gap: spacing.lg }}>
+      <Card variant="glass" style={{ gap: spacing.lg }}>
         <SettingRow icon={<Languages color={colors.primary} />} title={t("settings.language")} />
         <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8 }}>{(["ar", "en"] as Language[]).map((value) => <Pill key={value} selected={language === value} onPress={() => settings.setLanguage(value)}>{value === "ar" ? t("settings.arabic") : t("settings.english")}</Pill>)}</View>
       </Card>
 
-      <Card style={{ gap: spacing.lg }}>
+      <Card variant="glass" style={{ gap: spacing.lg }}>
         <SettingRow icon={settings.colorMode === "dark" ? <Moon color={colors.primary} /> : <Sun color={colors.primary} />} title={t("settings.appearance")} />
         <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8 }}>{themes.map((item) => <Pill key={item.value} selected={settings.colorMode === item.value} onPress={() => settings.setColorMode(item.value)}>{item.label}</Pill>)}</View>
       </Card>
 
-      <Card style={{ gap: spacing.lg }}>
+      <Card variant="glass" style={{ gap: spacing.lg }}>
         <SettingRow
           icon={<MousePointerClick color={colors.primary} />}
           title={language === "ar" ? "تسجيل بضغطة واحدة" : "One-tap set logging"}
-          description={language === "ar" ? "بعد أول مرة، اضغط اقتراح الوزن والعدات وسجّله فورًا." : "After the first entry, tap a weight-and-reps preset to log it instantly."}
+          description={language === "ar" ? "اضغط الاختيار المناسب وسجّل السِت فورًا." : "After the first entry, tap a weight-and-reps preset to log it instantly."}
         >
           <Switch
             value={settings.oneTapLoggingEnabled}
@@ -140,8 +141,19 @@ export default function SettingsScreen() {
         </SettingRow>
       </Card>
 
-      <Card style={{ gap: spacing.lg }}>
-        <SettingRow icon={<Bell color={colors.primary} />} title={language === "ar" ? "إشعارات الراحة" : "Rest notifications"} description={permission === "granted" ? (language === "ar" ? "الإذن متفعل" : "Permission granted") : permission === "denied" ? (language === "ar" ? "مقفولة من إعدادات الموبايل" : "Blocked in system settings") : (language === "ar" ? "هنطلب الإذن وقت التفعيل" : "Permission will be requested when enabled")}>
+      <Card variant="glass" style={{ gap: spacing.lg }}>
+        <SettingRow
+          icon={<Gauge color={colors.primary} />}
+          title={language === "ar" ? "الزيادة الافتراضية" : "Default load jump"}
+          description={language === "ar" ? "اختار الزيادة اللي بتستخدمها غالبًا. تقدر تغيّرها لكل تمرين من الجيم مود." : "Choose your usual jump. You can override it per exercise in Gym Mode."}
+        />
+        <View style={{ flexDirection: rowDirection, gap: 8 }}>
+          {([2.5, 5] as const).map((step) => <Pill key={step} selected={settings.defaultWeightStepKg === step} onPress={() => settings.setDefaultWeightStepKg(step)}>+{step} kg</Pill>)}
+        </View>
+      </Card>
+
+      <Card variant="glass" style={{ gap: spacing.lg }}>
+        <SettingRow icon={<Bell color={colors.primary} />} title={language === "ar" ? "تنبيه الراحة" : "Rest notification"} description={permission === "granted" ? (language === "ar" ? "الإذن متفعل" : "Permission granted") : permission === "denied" ? (language === "ar" ? "مقفولة من إعدادات الموبايل" : "Blocked in system settings") : (language === "ar" ? "هنطلب الإذن وقت التفعيل" : "Permission will be requested when enabled")}>
           <Switch value={settings.notificationsEnabled && permission !== "denied"} onValueChange={(value) => void toggleNotifications(value)} trackColor={{ false: colors.surfaceStrong, true: colors.primarySoft }} thumbColor={settings.notificationsEnabled ? colors.primary : colors.textFaint} />
         </SettingRow>
         <View style={{ height: 1, backgroundColor: colors.border }} />
@@ -156,7 +168,7 @@ export default function SettingsScreen() {
         {permission === "denied" ? <Button variant="ghost" onPress={() => void Linking.openSettings()}>{language === "ar" ? "افتح إعدادات الموبايل" : "Open system settings"}</Button> : null}
       </Card>
 
-      <Card style={{ gap: spacing.md }}>
+      <Card variant="glass" style={{ gap: spacing.md }}>
         <SettingRow
           icon={<Cloud color={colors.primary} />}
           title={language === "ar" ? "المزامنة والأوفلاين" : "Sync & offline"}
@@ -213,7 +225,7 @@ export default function SettingsScreen() {
         </Button>
       </Card>
 
-      <Card style={{ gap: spacing.md }}>
+      <Card variant="glass" style={{ gap: spacing.md }}>
         <SettingRow icon={<Scale color={colors.primary} />} title={t("settings.units")}>
           <View style={{ flexDirection: rowDirection, gap: 6 }}>{(["kg", "lb"] as WeightUnit[]).map((unit) => <Pill key={unit} selected={settings.weightUnit === unit} onPress={() => settings.setWeightUnit(unit)}>{unit}</Pill>)}</View>
         </SettingRow>

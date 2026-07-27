@@ -13,6 +13,7 @@ interface SettingsState {
   language: Language;
   colorMode: ColorMode;
   weightUnit: WeightUnit;
+  defaultWeightStepKg: 2.5 | 5;
   defaultRestSeconds: number;
   hapticsEnabled: boolean;
   soundEnabled: boolean;
@@ -21,6 +22,7 @@ interface SettingsState {
   setLanguage: (language: Language) => void;
   setColorMode: (mode: ColorMode) => void;
   setWeightUnit: (unit: WeightUnit) => void;
+  setDefaultWeightStepKg: (step: 2.5 | 5) => void;
   setDefaultRestSeconds: (seconds: number) => void;
   setHapticsEnabled: (enabled: boolean) => void;
   setSoundEnabled: (enabled: boolean) => void;
@@ -34,6 +36,7 @@ export const useSettingsStore = create<SettingsState>()(
       language: deviceLanguage,
       colorMode: "dark",
       weightUnit: "kg",
+      defaultWeightStepKg: 2.5,
       defaultRestSeconds: 120,
       hapticsEnabled: true,
       soundEnabled: true,
@@ -42,6 +45,7 @@ export const useSettingsStore = create<SettingsState>()(
       setLanguage: (language) => set({ language }),
       setColorMode: (colorMode) => set({ colorMode }),
       setWeightUnit: (weightUnit) => set({ weightUnit }),
+      setDefaultWeightStepKg: (defaultWeightStepKg) => set({ defaultWeightStepKg }),
       setDefaultRestSeconds: (defaultRestSeconds) => set({ defaultRestSeconds }),
       setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
       setSoundEnabled: (soundEnabled) => set({ soundEnabled }),
@@ -55,6 +59,7 @@ export const useSettingsStore = create<SettingsState>()(
         language: state.language,
         colorMode: state.colorMode,
         weightUnit: state.weightUnit,
+        defaultWeightStepKg: state.defaultWeightStepKg,
         defaultRestSeconds: state.defaultRestSeconds,
         hapticsEnabled: state.hapticsEnabled,
         soundEnabled: state.soundEnabled,

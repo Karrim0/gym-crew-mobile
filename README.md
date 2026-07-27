@@ -4,7 +4,7 @@ OVRLD is an offline-first React Native performance-training app built with Expo 
 TypeScript, Supabase, and SQLite. It supports solo athletes and workout crews,
 while keeping the in-gym flow focused on quick weight and reps logging.
 
-## Current release candidate: 1.1.0
+## Current release candidate: 1.2.0
 
 ### OVRLD product experience
 
@@ -72,23 +72,22 @@ npx expo start --dev-client --lan --clear
 ## Release quality gate
 
 ```bash
-npm run release:check
+npm run phase8:check
 ```
 
 On Windows:
 
 ```bat
-call VERIFY_PHASE6_RELEASE.cmd
+call VERIFY_PHASE8_PRODUCT.cmd
 ```
 
-The release gate verifies:
+The Phase 8 gate verifies:
 
+- the polished light/dark theme and glass-surface contract;
+- smart-set presets, bodyweight guards, and direct load jumps;
 - Phase 4 offline and null-safety regressions;
-- Phase 5 product/navigation contract;
-- 1.0.0 version synchronization across Expo and Android native code;
-- Android permission allowlist;
-- release policy tests;
-- TypeScript, ESLint, and Expo dependency alignment.
+- version `1.2.0` / build `10` synchronization;
+- TypeScript, ESLint, Expo dependency alignment, and public config resolution.
 
 ## Preview APK
 
