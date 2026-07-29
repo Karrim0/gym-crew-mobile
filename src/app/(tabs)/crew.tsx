@@ -20,6 +20,7 @@ import { useTranslation } from "@/lib/localization/use-translation";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { spacing } from "@/lib/theme/tokens";
 import { formatShortDate } from "@/lib/utils/date";
+import { crewRankPraise } from "@/lib/product/encouragement";
 import type { GroupMemberWeeklyStats } from "@/types";
 
 export default function CrewScreen() {
@@ -60,7 +61,7 @@ export default function CrewScreen() {
   }
 
   if (loading) return <Screen><ScreenSkeleton /></Screen>;
-  if (error && !stats.length) return <Screen><AppHeader title={t("crew.title")} /><ErrorState message={error} onRetry={() => void load()} /><Card muted elevated={false}><AppText variant="small" color="muted">{language === "ar" ? "لو الخطأ فيه user_id ambiguous، طبّق Migration 202607180001 على Supabase مرة واحدة." : "If the error mentions ambiguous user_id, apply migration 202607180001 to Supabase once."}</AppText></Card></Screen>;
+  if (error && !stats.length) return <Screen><AppHeader title={t("crew.title")} /><ErrorState message={language === "ar" ? "تعذر تحميل نشاط الجروب دلوقتي. جرّب تاني بعد لحظة." : "Crew activity could not load right now. Try again in a moment."} onRetry={() => void load()} /></Screen>;
   if (!membership || membership.group.isPersonal) {
     return (
       <Screen>
@@ -76,18 +77,19 @@ export default function CrewScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-      <AppHeader title={membership.group.name} subtitle={language === "ar" ? "الترتيب على الالتزام بخطة كل واحد، مش على الأوزان." : "Ranked by plan adherence, not weight lifted."} />
+      <AppHeader title={membership.group.name} subtitle={language === "ar" ? "المنافسة على الالتزام، مش على مين شايل أكتر." : "Compete on consistency, not who lifts more."} />
 
-      <Card style={{ gap: spacing.lg, backgroundColor: colors.primarySofter, borderColor: colors.primarySoft }}>
+      <Card variant="dark" style={{ gap: spacing.lg, padding: spacing.xl, borderRadius: 30 }}>
+        <View pointerEvents="none" style={{ position: "absolute", width: 210, height: 210, borderRadius: 105, backgroundColor: colors.glow, end: -95, top: -115 }} />
         <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
-          <View style={{ width: 56, height: 56, borderRadius: 19, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}><UsersRound color={colors.primary} size={28} /></View>
-          <View style={{ flex: 1, minWidth: 0 }}><AppText variant="title3">{stats.length} {language === "ar" ? "عضو" : stats.length === 1 ? "member" : "members"}</AppText><AppText variant="small" color="muted">{summary.sessions} {language === "ar" ? "تمرينة اتسجلت الأسبوع ده" : "workouts logged this week"}</AppText></View>
-          <View style={{ alignItems: "center" }}><AppText variant="title2" color="primary" align="center">{summary.average}%</AppText><AppText variant="caption" color="muted" align="center">{language === "ar" ? "متوسط" : "average"}</AppText></View>
+          <View style={{ width: 58, height: 58, borderRadius: 20, backgroundColor: colors.heroMuted, alignItems: "center", justifyContent: "center" }}><UsersRound color={colors.primary} size={29} /></View>
+          <View style={{ flex: 1, minWidth: 0 }}><AppText variant="title2" style={{ color: colors.textOnDark }}>{stats.length} {language === "ar" ? "عضو" : stats.length === 1 ? "member" : "members"}</AppText><AppText variant="small" style={{ color: colors.textOnDarkMuted }}>{summary.sessions} {language === "ar" ? "تمرينة الأسبوع ده" : "workouts this week"}</AppText></View>
+          <View style={{ alignItems: "center" }}><AppText variant="title1" color="primary" align="center">{summary.average}%</AppText><AppText variant="caption" style={{ color: colors.textOnDarkMuted }} align="center">{language === "ar" ? "التزام" : "adherence"}</AppText></View>
         </View>
         <ProgressBar value={summary.average} />
       </Card>
 
-      <Card style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
+      <Card variant="glass" style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
         <View style={{ flex: 1, minWidth: 0 }}><AppText variant="caption" color="muted">{t("crew.invite")}</AppText><AppText variant="title2" style={{ letterSpacing: 3 }}>{membership.group.inviteCode}</AppText></View>
         <Pressable accessibilityRole="button" onPress={() => void copyInvite()} style={({ pressed }) => ({ width: 52, height: 52, borderRadius: 18, backgroundColor: copied ? colors.successSoft : colors.primarySoft, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}>{copied ? <Check color={colors.success} /> : <Copy color={colors.primary} />}</Pressable>
       </Card>
@@ -100,7 +102,7 @@ export default function CrewScreen() {
           const canViewRecords = isMe || member.sharePersonalRecords;
           const role = member.role === "owner" ? (language === "ar" ? "المالك" : "Owner") : member.role === "admin" ? (language === "ar" ? "أدمن" : "Admin") : null;
           return (
-            <Card key={member.userId} style={{ gap: spacing.md, borderColor: isMe ? colors.primary : colors.border }}>
+            <Card key={member.userId} variant="glass" style={{ gap: spacing.sm, borderColor: isMe ? colors.primary : colors.glassBorder }}>
               <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
                 <View style={{ width: 38, alignItems: "center" }}>{index === 0 ? <Crown color={colors.warning} size={25} /> : index < 3 ? <Medal color={colors.primary} size={24} /> : <AppText variant="bodyStrong" align="center">{index + 1}</AppText>}</View>
                 <Avatar name={member.displayName} url={member.avatarUrl} size={48} />
@@ -111,6 +113,7 @@ export default function CrewScreen() {
                       ? t("crew.adherence", { completed: member.sessionsThisWeek, planned: member.scheduledThisWeek, percent: member.adherencePercent })
                       : (language === "ar" ? "ملخص التمرينات خاص" : "Workout summary is private")}
                   </AppText>
+                  {canViewSummary ? <AppText variant="caption" color={index === 0 ? "warning" : index === stats.length - 1 && stats.length > 2 ? "faint" : "primary"}>{crewRankPraise(language, index, stats.length)}</AppText> : null}
                   <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8, marginTop: 4 }}>
                     {canViewRecords ? <AppText variant="caption" color="muted">{member.personalRecordsCount} PR</AppText> : null}
                     {canViewSummary && member.lastWorkoutAt ? <AppText variant="caption" color="muted">{formatShortDate(member.lastWorkoutAt, language)}</AppText> : null}
@@ -124,7 +127,7 @@ export default function CrewScreen() {
         })}
         {!stats.length ? <Card><AppText color="muted">{language === "ar" ? "أول ما أعضاء الجروب يتمرنوا، الترتيب هيظهر هنا." : "The leaderboard will appear after members complete workouts."}</AppText></Card> : null}
       </View>
-      {error ? <Card muted elevated={false}><AppText variant="small" color="warning">{error}</AppText></Card> : null}
+      {error ? <Card muted elevated={false}><AppText variant="small" color="warning">{language === "ar" ? "معروض آخر نشاط محفوظ على الجهاز. اسحب للتحديث لما النت يستقر." : "Showing the latest activity saved on this device. Pull to refresh when the connection is stable."}</AppText></Card> : null}
     </Screen>
   );
 }

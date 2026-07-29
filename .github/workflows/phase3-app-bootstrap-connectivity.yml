@@ -1,0 +1,83 @@
+name: Phase 3 App Bootstrap and Connectivity
+
+on:
+  push:
+    branches:
+      - phase/3-app-bootstrap-connectivity
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "app.config.js"
+      - "android/app/src/main/AndroidManifest.xml"
+      - "src/app/_layout.tsx"
+      - "src/app/settings.tsx"
+      - "src/components/layout/connectivity-banner.tsx"
+      - "src/lib/offline/network.ts"
+      - "src/lib/offline/sync.ts"
+      - "src/stores/connectivity-store.ts"
+      - "src/stores/session-store.ts"
+      - "scripts/verify-phase3-bootstrap.mjs"
+      - ".github/workflows/phase3-app-bootstrap-connectivity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-bootstrap:
+    name: Validate app bootstrap and connectivity
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Phase 3 contract
+        run: |
+          mkdir -p artifacts
+          node scripts/verify-phase3-bootstrap.mjs \
+            | tee artifacts/phase3-verification.txt
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Check Expo dependency alignment
+        run: npx expo install --check
+
+      - name: Capture Expo public config
+        run: npx expo config --type public --json > artifacts/expo-public-config.json
+
+      - name: Export Android JavaScript bundle
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-key
+        run: |
+          rm -rf dist/phase3-android
+          npx expo export --platform android --output-dir dist/phase3-android
+          find dist/phase3-android -maxdepth 2 -type f -printf "%P\n" \
+            | sort > artifacts/android-export-files.txt
+          du -sh dist/phase3-android > artifacts/android-export-size.txt
+
+      - name: Capture top-level dependencies
+        run: npm ls --depth=0 > artifacts/npm-top-level.txt
+
+      - name: Upload Phase 3 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gym-crew-phase3-bootstrap-connectivity
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14

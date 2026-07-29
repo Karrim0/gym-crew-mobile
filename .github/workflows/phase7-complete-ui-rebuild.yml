@@ -1,0 +1,115 @@
+name: Phase 7 Complete UI Rebuild
+
+on:
+  push:
+    branches:
+      - "phase/7-*"
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "app.config.js"
+      - "android/**"
+      - "assets/images/**"
+      - "src/**"
+      - "scripts/phase7-**"
+      - "scripts/run-phase7-smart-presets-tests.mjs"
+      - "scripts/verify-phase7-ui-rebuild.mjs"
+      - "INSTALL_PHASE7_DEPENDENCIES.cmd"
+      - "VERIFY_PHASE7_UI.cmd"
+      - "docs/PHASE_7_COMPLETE_UI_REBUILD.md"
+      - "docs/PHOTO_CREDITS.md"
+      - ".github/workflows/phase7-complete-ui-rebuild.yml"
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "app.config.js"
+      - "android/**"
+      - "assets/images/**"
+      - "src/**"
+      - "scripts/**"
+      - "INSTALL_PHASE7_DEPENDENCIES.cmd"
+      - "VERIFY_PHASE7_UI.cmd"
+      - "docs/**"
+      - ".github/workflows/phase7-complete-ui-rebuild.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-ui-rebuild:
+    name: Validate OVRLD product experience
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts
+
+      - name: Verify OVRLD UI contract
+        run: npm run verify:phase7 | tee artifacts/phase7-ui-verification.txt
+
+      - name: Test smart set presets
+        run: npm run test:smart-presets | tee artifacts/smart-preset-tests.txt
+
+      - name: Regression contracts
+        run: |
+          npm run verify:phase4 | tee artifacts/phase4-offline-regression.txt
+          npm run verify:phase4-null-safety | tee artifacts/phase4-null-regression.txt
+          npm run test:offline-policy | tee artifacts/offline-policy-tests.txt
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Check Expo dependency alignment
+        run: npx expo install --check
+
+      - name: Resolve Expo public config
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-publishable-key
+          EXPO_PUBLIC_WEB_API_URL: https://example.com
+        run: npx expo config --type public > artifacts/expo-public-config.txt
+
+      - name: Export Android JavaScript bundle
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-publishable-key
+          EXPO_PUBLIC_WEB_API_URL: https://example.com
+        run: |
+          rm -rf dist/phase7-android
+          npx expo export --platform android --output-dir dist/phase7-android
+          find dist/phase7-android -maxdepth 3 -type f -printf "%P\n" | sort > artifacts/android-export-files.txt
+          du -sh dist/phase7-android > artifacts/android-export-size.txt
+
+      - name: Capture brand identity
+        run: |
+          node -e 'const p=require("./package.json"); console.log(`name=${p.name}\nversion=${p.version}`)' > artifacts/brand-identity.txt
+          grep -E "versionCode|versionName" android/app/build.gradle >> artifacts/brand-identity.txt
+          find assets/images/brand -maxdepth 1 -type f -printf "%f %s bytes\n" | sort > artifacts/brand-images.txt
+
+      - name: Upload Phase 7 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ovrld-phase7-complete-ui-rebuild
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30

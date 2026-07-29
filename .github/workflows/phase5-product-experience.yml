@@ -1,0 +1,80 @@
+name: Phase 5 Product Experience
+
+on:
+  push:
+    branches:
+      - phase/5-product-experience-rebuild
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "app.config.js"
+      - "src/app/**"
+      - "src/components/**"
+      - "src/lib/theme/**"
+      - "src/stores/settings-store.ts"
+      - "scripts/verify-phase5-product.mjs"
+      - "VERIFY_PHASE5_PRODUCT.cmd"
+      - ".github/workflows/phase5-product-experience.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-product:
+    name: Validate product experience rebuild
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Phase 5 contract
+        run: |
+          mkdir -p artifacts
+          npm run verify:phase5 | tee artifacts/phase5-verification.txt
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Check Expo dependency alignment
+        run: npx expo install --check
+
+      - name: Resolve Expo public config
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-key
+          EXPO_PUBLIC_WEB_API_URL: https://example.com
+        run: npx expo config --type public > artifacts/expo-public-config.txt
+
+      - name: Export Android JavaScript bundle
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-key
+          EXPO_PUBLIC_WEB_API_URL: https://example.com
+        run: |
+          rm -rf dist/phase5-android
+          npx expo export --platform android --output-dir dist/phase5-android
+          find dist/phase5-android -maxdepth 2 -type f -printf "%P\n" | sort > artifacts/android-export-files.txt
+          du -sh dist/phase5-android > artifacts/android-export-size.txt
+
+      - name: Upload Phase 5 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gym-crew-phase5-product-experience
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14

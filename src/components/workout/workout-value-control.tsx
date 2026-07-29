@@ -3,7 +3,7 @@ import { Minus, Plus } from "lucide-react-native";
 import { AppText } from "@/components/ui/app-text";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
-import { spacing } from "@/lib/theme/tokens";
+import { radii, spacing } from "@/lib/theme/tokens";
 
 interface WorkoutValueControlProps {
   label: string;
@@ -14,9 +14,10 @@ interface WorkoutValueControlProps {
   max: number;
   onChange: (value: number) => void;
   onEdit: () => void;
+  compact?: boolean;
 }
 
-export function WorkoutValueControl({ label, value, suffix, step, min, max, onChange, onEdit }: WorkoutValueControlProps) {
+export function WorkoutValueControl({ label, value, suffix, step, min, max, onChange, onEdit, compact = false }: WorkoutValueControlProps) {
   const { colors } = useAppTheme();
   const { rowDirection } = useTranslation();
   const current = value ?? min;
@@ -27,26 +28,22 @@ export function WorkoutValueControl({ label, value, suffix, step, min, max, onCh
 
   return (
     <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
-      <AppText variant="caption" color="muted" align="center">{label}</AppText>
-      <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 7, backgroundColor: colors.surfaceMuted, borderRadius: 18, padding: 6, borderWidth: 1, borderColor: colors.border }}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => change(-step)}
-          style={({ pressed }) => ({ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}
-        >
-          <Minus color={colors.text} size={19} />
+      <AppText variant="overline" color="muted" align="center">{label}</AppText>
+      <View style={{ backgroundColor: colors.surfaceSunken, borderRadius: radii.xl, padding: 8, borderWidth: 1, borderColor: colors.border, gap: 8 }}>
+        <Pressable accessibilityRole="button" onPress={onEdit} style={({ pressed }) => ({ minHeight: compact ? 54 : 66, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1 })}>
+          <View style={{ flexDirection: rowDirection, alignItems: "flex-end", gap: 5 }}>
+            <AppText variant={compact ? "metric" : "metricLarge"} numeric align="center" numberOfLines={1}>{value ?? "—"}</AppText>
+            {suffix ? <AppText variant="smallBold" color="muted" style={{ paddingBottom: compact ? 4 : 7 }}>{suffix}</AppText> : null}
+          </View>
         </Pressable>
-        <Pressable onPress={onEdit} style={({ pressed }) => ({ flex: 1, minWidth: 0, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.72 : 1, paddingHorizontal: spacing.xxs })}>
-          <AppText variant="title2" align="center" numberOfLines={1}>{value ?? "—"}</AppText>
-          {suffix ? <AppText variant="caption" color="muted" align="center">{suffix}</AppText> : null}
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => change(step)}
-          style={({ pressed }) => ({ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.7 : 1 })}
-        >
-          <Plus color={colors.text} size={19} />
-        </Pressable>
+        <View style={{ flexDirection: rowDirection, gap: spacing.xs }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`minus ${step}`} onPress={() => change(-step)} style={({ pressed }) => ({ flex: 1, height: 46, borderRadius: 15, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.68 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] })}>
+            <Minus color={colors.text} size={21} strokeWidth={2.5} />
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`plus ${step}`} onPress={() => change(step)} style={({ pressed }) => ({ flex: 1, height: 46, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.78 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] })}>
+            <Plus color={colors.primaryInk} size={22} strokeWidth={2.8} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );

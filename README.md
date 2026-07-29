@@ -1,37 +1,55 @@
-# Gym Crew Mobile
+# OVRLD Mobile
 
-A native React Native rebuild of Gym Crew, built with Expo, TypeScript, Expo Router, Supabase, SQLite, and an offline-first workout queue.
+OVRLD is an offline-first personal training operating system built with React Native,
+Expo Router, TypeScript, Supabase, and SQLite. The individual athlete experience is
+the product core; workout crews are an optional social layer.
 
-## Current mobile release: Core Beta 0.1.0
+## Current release candidate: 1.4.0 (build 12)
 
-This first native milestone focuses on the product's highest-value loop:
+### Product architecture
 
-- Arabic Egyptian and English, with RTL/LTR switching.
-- Light, dark, and system appearance.
-- Supabase email authentication and onboarding.
-- Personal split setup, starter templates, day editing, exercise search, and targets.
-- Home dashboard with today's planned workout and weekly schedule.
-- Guided Gym Mode:
-  - choose any exercise first;
-  - see previous sets;
-  - focus screen while performing the set;
-  - tap weight and reps instead of typing by default;
-  - configurable weight increments per exercise;
-  - automatic rest timer, sound, haptics, and local notification;
-  - reorder exercises and add extra sets;
-  - keep the screen awake during an active workout.
-- SQLite workout cache and queued Supabase synchronization.
-- Workout history, weekly stats, top weights, and crew adherence leaderboard.
-- Safe-area, keyboard, 320px-screen, and dynamic type considerations.
+- Five primary destinations: Today, Plan, Train, Progress, and Profile.
+- Today adapts to a scheduled workout, an open session, a recovery day, or a missing plan.
+- Plan contains the weekly schedule, active split, templates, and exercise library.
+- Train supports today’s workout, active-session resume, quick workout, and repeat previous workout.
+- Progress covers consistency, workout history, strongest performances, volume, and streaks.
+- Profile contains Crew, notifications, language, appearance, training preferences, and sync controls.
 
-The existing Next.js app remains the web product and server API. Mobile and web share the same Supabase project and database schema.
+### OVRLD product identity
+
+- OVRLD Volt `#C8FF3D` is the single focused brand accent.
+- Dedicated dark and light theme surfaces.
+- Alexandria for Arabic/interface copy and Inter for weights, reps, timers, and metrics.
+- Arabic Egyptian and English with RTL/LTR layouts.
+- Updated adaptive icon, favicon, and splash mark.
+
+### Gym Mode
+
+- Inline pre-workout review instead of an interruptive ordering prompt.
+- Compact session and exercise context.
+- Completed, current, and upcoming set rows.
+- One primary performance recommendation with compact alternatives.
+- Manual weight/repetition entry and quick load controls.
+- Dynamic fixed logging action that displays the exact values being saved.
+- Optional one-tap logging, undo, extra sets, notes, reordering, and exercise selection.
+- Optional automatic rest timer with a non-blocking mini-player.
+- Live local-save and sync status.
+
+### Offline reliability
+
+After one successful online warm-up, the app caches the profile, workspace,
+training plan, exercise library, active workout, history, and progress data.
+An active workout can be continued after force-close while offline. Mutations are
+queued in SQLite with idempotency keys, retry backoff, conflict rules, and a
+failed-change recovery path.
 
 ## Requirements
 
-- Node.js 20+
-- Android Studio for local Android emulators/native builds
-- Expo account for EAS builds
-- The Gym Crew Supabase project with the existing migrations applied
+- Node.js 22 recommended
+- npm
+- Expo account for EAS cloud builds
+- OVRLD Supabase project with the committed migration chain applied
+- Android Studio only for local native builds or an emulator
 
 ## Configure
 
@@ -39,72 +57,88 @@ The existing Next.js app remains the web product and server API. Mobile and web 
 cp .env.example .env.local
 ```
 
-Fill in:
+Use public mobile values only:
 
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_OR_ANON_KEY
-EXPO_PUBLIC_WEB_API_URL=https://YOUR_WEB_APP.vercel.app
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+EXPO_PUBLIC_WEB_API_URL=https://YOUR_WEB_APP.example
 ```
 
-Never place a Supabase service-role key or an OpenAI key in an `EXPO_PUBLIC_` variable.
+Never put a service-role key, private API key, or signing credential in an
+`EXPO_PUBLIC_` variable.
 
-## Run
-
-```bash
-npm install
-npm run check
-npx expo start
-```
-
-Open Android with `a`, or scan the development QR code. Native notification sound behavior should be verified in a development build rather than relying only on Expo Go.
-
-## EAS builds
+## Development
 
 ```bash
-npm install -g eas-cli
-eas login
-eas init
-```
-
-Copy the generated project ID into `EXPO_PUBLIC_EAS_PROJECT_ID`, then:
-
-```bash
-# Internal Android APK
-eas build --platform android --profile preview
-
-# Play Store AAB
-eas build --platform android --profile production
-```
-
-Change `com.karrim.gymcrew` in `app.config.ts` before the first store release if a different permanent application ID is required. Once published, the application ID should not change.
-
-## Quality checks
-
-```bash
+npm ci
 npm run typecheck
 npm run lint
-npm run check
-npx expo install --check
+npx expo start --dev-client --lan --clear
 ```
+
+## Phase 9 quality gate
+
+```bash
+npm run phase9:check
+```
+
+On Windows:
+
+```bat
+call VERIFY_PHASE9_FINAL.cmd
+```
+
+The Phase 9 gate verifies:
+
+- release identity `1.4.0` / build `12`;
+- Today / Plan / Train / Progress / Profile architecture;
+- Gym Mode preflight, set rows, recommendations, fixed action, and rest mini-player;
+- smart-set recommendation behavior and bodyweight guards;
+- offline reliability, null safety, retry, and idempotency regressions;
+- TypeScript, ESLint, Expo dependency alignment, public config, and Android export.
+
+## Preview APK
+
+```bash
+npx eas-cli@latest build --platform android --profile preview --clear-cache
+```
+
+The preview profile produces a standalone APK for physical-device testing.
+Do not tag the release until dark/light, Arabic/English, Gym Mode, force-close,
+and offline-to-online synchronization checks pass on a physical device.
+
+## Production Android build
+
+```bash
+npx eas-cli@latest build --platform android --profile production
+```
+
+The production profile produces an Android App Bundle. Complete the physical
+release checklist before uploading it to a store track.
 
 ## Architecture
 
 ```text
 src/app                 Expo Router screens
-src/components          Reusable native UI and Gym Mode components
-src/features            Supabase-facing feature services
-src/lib/offline         SQLite cache and ordered sync queue
-src/lib/notifications   Rest notification and timer integration
-src/stores              Persisted settings, auth context, timer state
-src/types               Shared app-facing domain and generated DB types
+src/components          Shared UI and Gym Mode components
+src/features            Auth, profile, crew, split, and workout services
+src/lib/offline         SQLite cache, network state, and mutation queue
+src/lib/notifications   Rest timer and local notifications
+src/stores              Session, settings, timer, notifications, connectivity
+src/types               Domain and generated Supabase types
+supabase/migrations     Reproducible database migration chain
 ```
 
-## Next production milestones
+## Release identity
 
-1. Mobile plan import review and save flow using the existing web API.
-2. Full crew administration, invites, activity feed, and challenges.
-3. Background-sync hardening and conflict-resolution telemetry.
-4. Exercise media library and richer muscle illustrations.
-5. Automated unit, integration, and Maestro end-to-end tests.
-6. Store privacy forms, crash reporting, analytics consent, and staged beta release.
+- Expo project: `kareem-hanafy`
+- Expo owner: `kaghim0s-team`
+- Android package: `com.karrim.gymcrew`
+- iOS bundle identifier: `com.karrim.gymcrew`
+- App version: `1.4.0`
+- Android version code: `12`
+- iOS build number: `12`
+
+See `docs/PHASE_9_FINAL_PRODUCT_RELEASE.md` and
+`docs/PHYSICAL_DEVICE_RELEASE_CHECKLIST.md` for the final handoff gates.

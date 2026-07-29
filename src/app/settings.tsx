@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { Alert, Linking, Switch, View } from "react-native";
+import { Linking, Switch, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   ArrowLeft,
@@ -10,19 +10,25 @@ import {
   Languages,
   LogOut,
   Moon,
+  MousePointerClick,
   RefreshCw,
   Scale,
+  Gauge,
   Smartphone,
+  TimerReset,
   Sun,
+  ShieldAlert,
   Vibrate,
   Volume2,
 } from "lucide-react-native";
+import { appConfig } from "@/config/app";
 import { Screen } from "@/components/ui/screen";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { Pill } from "@/components/ui/pill";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { ActionSheet } from "@/components/ui/action-sheet";
 import { useTranslation } from "@/lib/localization/use-translation";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import {
@@ -35,6 +41,7 @@ import { useSettingsStore, type ColorMode, type Language, type WeightUnit } from
 import { useSessionStore } from "@/stores/session-store";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { spacing } from "@/lib/theme/tokens";
+import { friendlyError } from "@/lib/supabase/errors";
 
 function SettingRow({ icon, title, description, children }: { icon: ReactNode; title: string; description?: string; children?: ReactNode }) {
   const { rowDirection } = useTranslation();
@@ -55,12 +62,16 @@ export default function SettingsScreen() {
   const settings = useSettingsStore();
   const signOut = useSessionStore((state) => state.signOutLocal);
   const pending = useConnectivityStore((state) => state.pending);
+  const failed = useConnectivityStore((state) => state.failed);
   const syncing = useConnectivityStore((state) => state.syncing);
   const lastError = useConnectivityStore((state) => state.lastError);
-  const isOnline = useConnectivityStore((state) => state.isConnected && state.isInternetReachable);
+  const networkStatus = useConnectivityStore((state) => state.networkStatus);
   const syncNow = useConnectivityStore((state) => state.syncNow);
+  const retryFailed = useConnectivityStore((state) => state.retryFailed);
   const [permission, setPermission] = useState<NotificationPermissionState>("undetermined");
   const [testing, setTesting] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
+  const [signOutOpen, setSignOutOpen] = useState(false);
 
   const refreshPermission = useCallback(async () => setPermission(await getNotificationPermissionState()), []);
   useFocusEffect(useCallback(() => { void refreshPermission(); }, [refreshPermission]));
@@ -80,17 +91,11 @@ export default function SettingsScreen() {
     await refreshPermission();
     if (!granted) {
       settings.setNotificationsEnabled(false);
-      Alert.alert(
-        language === "ar" ? "الإشعارات مقفولة" : "Notifications are disabled",
-        language === "ar" ? "فعّلها من إعدادات الموبايل عشان تنبيه الراحة يشتغل في الخلفية." : "Enable them in system settings so rest alerts work in the background.",
-        [
-          { text: t("common.cancel"), style: "cancel" },
-          { text: language === "ar" ? "افتح الإعدادات" : "Open settings", onPress: () => void Linking.openSettings() },
-        ],
-      );
+      setNotificationMessage(language === "ar" ? "الإشعارات مقفولة من إعدادات الموبايل." : "Notifications are blocked in system settings.");
       return;
     }
     settings.setNotificationsEnabled(true);
+    setNotificationMessage(null);
   }
 
   async function testNotification() {
@@ -99,11 +104,11 @@ export default function SettingsScreen() {
       const granted = await requestNotificationPermission();
       await refreshPermission();
       if (!granted) {
-        Alert.alert(t("common.error"), language === "ar" ? "إذن الإشعارات مش متاح." : "Notification permission is not available.");
+        setNotificationMessage(language === "ar" ? "فعّل الإشعارات من إعدادات الموبايل الأول." : "Enable notifications in system settings first.");
         return;
       }
       await sendTestNotification(language, settings.soundEnabled, settings.hapticsEnabled);
-      Alert.alert(t("common.done"), language === "ar" ? "هيظهر تنبيه تجريبي خلال ثانيتين." : "A test alert will appear in two seconds.");
+      setNotificationMessage(language === "ar" ? "التنبيه التجريبي هيظهر خلال ثانيتين." : "A test notification will appear in two seconds.");
     } finally { setTesting(false); }
   }
 
@@ -111,21 +116,47 @@ export default function SettingsScreen() {
     <Screen>
       <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.sm }}>
         <IconButton onPress={() => router.back()} icon={isRTL ? <ChevronLeft color={colors.text} /> : <ArrowLeft color={colors.text} />} />
-        <View style={{ flex: 1 }}><AppText variant="title2">{t("settings.title")}</AppText><AppText variant="small" color="muted">{language === "ar" ? "ظبط التطبيق على طريقتك." : "Make the app work your way."}</AppText></View>
+        <View style={{ flex: 1 }}><AppText variant="title2">{t("settings.title")}</AppText><AppText variant="small" color="muted">{language === "ar" ? "ظبط التمرين على طريقتك." : "Make the app work your way."}</AppText></View>
       </View>
 
-      <Card style={{ gap: spacing.lg }}>
+      <Card variant="glass" style={{ gap: spacing.lg }}>
         <SettingRow icon={<Languages color={colors.primary} />} title={t("settings.language")} />
         <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8 }}>{(["ar", "en"] as Language[]).map((value) => <Pill key={value} selected={language === value} onPress={() => settings.setLanguage(value)}>{value === "ar" ? t("settings.arabic") : t("settings.english")}</Pill>)}</View>
       </Card>
 
-      <Card style={{ gap: spacing.lg }}>
+      <Card variant="glass" style={{ gap: spacing.lg }}>
         <SettingRow icon={settings.colorMode === "dark" ? <Moon color={colors.primary} /> : <Sun color={colors.primary} />} title={t("settings.appearance")} />
         <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8 }}>{themes.map((item) => <Pill key={item.value} selected={settings.colorMode === item.value} onPress={() => settings.setColorMode(item.value)}>{item.label}</Pill>)}</View>
       </Card>
 
-      <Card style={{ gap: spacing.lg }}>
-        <SettingRow icon={<Bell color={colors.primary} />} title={language === "ar" ? "إشعارات الراحة" : "Rest notifications"} description={permission === "granted" ? (language === "ar" ? "الإذن متفعل" : "Permission granted") : permission === "denied" ? (language === "ar" ? "مقفولة من إعدادات الموبايل" : "Blocked in system settings") : (language === "ar" ? "هنطلب الإذن وقت التفعيل" : "Permission will be requested when enabled")}>
+      <Card variant="glass" style={{ gap: spacing.lg }}>
+        <SettingRow
+          icon={<MousePointerClick color={colors.primary} />}
+          title={language === "ar" ? "تسجيل بضغطة واحدة" : "One-tap set logging"}
+          description={language === "ar" ? "اضغط الاختيار المناسب وسجّل السِت فورًا." : "After the first entry, tap a weight-and-reps preset to log it instantly."}
+        >
+          <Switch
+            value={settings.oneTapLoggingEnabled}
+            onValueChange={settings.setOneTapLoggingEnabled}
+            trackColor={{ false: colors.surfaceStrong, true: colors.primarySoft }}
+            thumbColor={settings.oneTapLoggingEnabled ? colors.primary : colors.textFaint}
+          />
+        </SettingRow>
+      </Card>
+
+      <Card variant="glass" style={{ gap: spacing.lg }}>
+        <SettingRow
+          icon={<Gauge color={colors.primary} />}
+          title={language === "ar" ? "الزيادة الافتراضية" : "Default load jump"}
+          description={language === "ar" ? "اختار الزيادة اللي بتستخدمها غالبًا. تقدر تغيّرها لكل تمرين من الجيم مود." : "Choose your usual jump. You can override it per exercise in Gym Mode."}
+        />
+        <View style={{ flexDirection: rowDirection, gap: 8 }}>
+          {([2.5, 5] as const).map((step) => <Pill key={step} selected={settings.defaultWeightStepKg === step} onPress={() => settings.setDefaultWeightStepKg(step)}>+{step} kg</Pill>)}
+        </View>
+      </Card>
+
+      <Card variant="glass" style={{ gap: spacing.lg }}>
+        <SettingRow icon={<Bell color={colors.primary} />} title={language === "ar" ? "تنبيه الراحة" : "Rest notification"} description={permission === "granted" ? (language === "ar" ? "الإذن متفعل" : "Permission granted") : permission === "denied" ? (language === "ar" ? "مقفولة من إعدادات الموبايل" : "Blocked in system settings") : (language === "ar" ? "هنطلب الإذن وقت التفعيل" : "Permission will be requested when enabled")}>
           <Switch value={settings.notificationsEnabled && permission !== "denied"} onValueChange={(value) => void toggleNotifications(value)} trackColor={{ false: colors.surfaceStrong, true: colors.primarySoft }} thumbColor={settings.notificationsEnabled ? colors.primary : colors.textFaint} />
         </SettingRow>
         <View style={{ height: 1, backgroundColor: colors.border }} />
@@ -133,26 +164,91 @@ export default function SettingsScreen() {
         <View style={{ height: 1, backgroundColor: colors.border }} />
         <SettingRow icon={<Vibrate color={colors.primary} />} title={t("settings.haptics")}><Switch value={settings.hapticsEnabled} onValueChange={settings.setHapticsEnabled} trackColor={{ false: colors.surfaceStrong, true: colors.primarySoft }} thumbColor={settings.hapticsEnabled ? colors.primary : colors.textFaint} /></SettingRow>
         <View style={{ height: 1, backgroundColor: colors.border }} />
+        <SettingRow
+          icon={<TimerReset color={colors.primary} />}
+          title={language === "ar" ? "ابدأ الراحة تلقائيًا" : "Auto-start rest timer"}
+          description={language === "ar" ? "بعد تسجيل السِت يبدأ المؤقت من غير ما يعطلك." : "Start the timer immediately after a set is logged."}
+        >
+          <Switch value={settings.autoStartRestTimerEnabled} onValueChange={settings.setAutoStartRestTimerEnabled} trackColor={{ false: colors.surfaceStrong, true: colors.primarySoft }} thumbColor={settings.autoStartRestTimerEnabled ? colors.primary : colors.textFaint} />
+        </SettingRow>
+        <View style={{ height: 1, backgroundColor: colors.border }} />
         <SettingRow icon={<Smartphone color={colors.primary} />} title={t("settings.restTimer")} />
         <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8 }}>{[60, 90, 120, 180, 240, 300].map((seconds) => <Pill key={seconds} selected={settings.defaultRestSeconds === seconds} onPress={() => settings.setDefaultRestSeconds(seconds)}>{seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}</Pill>)}</View>
         <Button variant="secondary" loading={testing} icon={<BellRing color={colors.primary} size={18} />} onPress={() => void testNotification()}>{language === "ar" ? "جرّب التنبيه" : "Test notification"}</Button>
+        {notificationMessage ? <AppText variant="small" color={permission === "denied" ? "warning" : "muted"}>{notificationMessage}</AppText> : null}
         {permission === "denied" ? <Button variant="ghost" onPress={() => void Linking.openSettings()}>{language === "ar" ? "افتح إعدادات الموبايل" : "Open system settings"}</Button> : null}
       </Card>
 
-      <Card style={{ gap: spacing.md }}>
-        <SettingRow icon={<Cloud color={colors.primary} />} title={language === "ar" ? "المزامنة والأوفلاين" : "Sync & offline"} description={!isOnline ? (language === "ar" ? "أنت أوفلاين، كل حاجة محفوظة محليًا." : "You are offline; changes are saved locally.") : pending ? (language === "ar" ? `${pending} تعديل مستني المزامنة.` : `${pending} changes waiting to sync.`) : (language === "ar" ? "كل بياناتك متزامنة." : "All data is synced.")} />
-        {lastError ? <AppText variant="small" color="danger">{lastError}</AppText> : null}
-        <Button variant="secondary" disabled={!isOnline || syncing} loading={syncing} icon={<RefreshCw color={colors.primary} size={18} />} onPress={() => void syncNow()}>{language === "ar" ? "زامن دلوقتي" : "Sync now"}</Button>
+      <Card variant="glass" style={{ gap: spacing.md }}>
+        <SettingRow
+          icon={<Cloud color={colors.primary} />}
+          title={language === "ar" ? "المزامنة والأوفلاين" : "Sync & offline"}
+          description={
+            failed
+              ? language === "ar"
+                ? `${failed} تعديل فشل بعد كذا محاولة. بياناتك لسه محفوظة على الجهاز.`
+                : `${failed} changes need a manual retry. Your local data is still safe.`
+              : networkStatus === "offline"
+                ? language === "ar"
+                  ? "أنت أوفلاين، كل حاجة محفوظة محليًا."
+                  : "You are offline; changes are saved locally."
+                : networkStatus === "unknown"
+                  ? language === "ar"
+                    ? "مش قادرين نأكد حالة النت، لكن تقدر تحاول المزامنة."
+                    : "Connection status is unknown, but you can still retry sync."
+                  : pending
+                    ? language === "ar"
+                      ? `${pending} تعديل مستني المزامنة.`
+                      : `${pending} changes waiting to sync.`
+                    : language === "ar"
+                      ? "كل بياناتك متزامنة."
+                      : "All data is synced."
+          }
+        />
+        {lastError ? (
+          <AppText variant="small" color="danger">
+            {friendlyError(
+              new Error(lastError),
+              language === "ar"
+                ? "المزامنة متأخرة شوية. جرّب تاني لما النت يستقر."
+                : "Sync is delayed. Try again when the connection is stable.",
+            )}
+          </AppText>
+        ) : null}
+        <Button
+          variant={failed ? "danger" : "secondary"}
+          disabled={networkStatus === "offline" || syncing}
+          loading={syncing}
+          icon={
+            failed
+              ? <ShieldAlert color={colors.white} size={18} />
+              : <RefreshCw color={colors.primary} size={18} />
+          }
+          onPress={() => void (failed ? retryFailed() : syncNow(true))}
+        >
+          {failed
+            ? language === "ar"
+              ? "حاول تزامن التعديلات الفاشلة"
+              : "Retry failed changes"
+            : language === "ar"
+              ? "زامن دلوقتي"
+              : "Sync now"}
+        </Button>
       </Card>
 
-      <Card style={{ gap: spacing.md }}>
+      <Card variant="glass" style={{ gap: spacing.md }}>
         <SettingRow icon={<Scale color={colors.primary} />} title={t("settings.units")}>
           <View style={{ flexDirection: rowDirection, gap: 6 }}>{(["kg", "lb"] as WeightUnit[]).map((unit) => <Pill key={unit} selected={settings.weightUnit === unit} onPress={() => settings.setWeightUnit(unit)}>{unit}</Pill>)}</View>
         </SettingRow>
       </Card>
 
-      <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => Alert.alert(t("settings.signOut"), language === "ar" ? "متأكد إنك عايز تخرج؟" : "Are you sure?", [{ text: t("common.cancel"), style: "cancel" }, { text: t("settings.signOut"), style: "destructive", onPress: () => void signOut() }])}>{t("settings.signOut")}</Button>
-      <AppText variant="caption" color="faint" align="center">Gym Crew Mobile · 0.2.0</AppText>
+      <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => setSignOutOpen(true)}>{t("settings.signOut")}</Button>
+      <AppText variant="caption" color="faint" align="center">OVRLD · {appConfig.version}</AppText>
+
+      <ActionSheet visible={signOutOpen} title={t("settings.signOut")} description={language === "ar" ? "بيانات التمرين المحفوظة محليًا هتفضل آمنة على الجهاز." : "Locally saved workout data stays safe on this device."} onClose={() => setSignOutOpen(false)}>
+        <Button variant="secondary" onPress={() => setSignOutOpen(false)}>{t("common.cancel")}</Button>
+        <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => void signOut()}>{t("settings.signOut")}</Button>
+      </ActionSheet>
     </Screen>
   );
 }

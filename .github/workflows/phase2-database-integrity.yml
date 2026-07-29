@@ -1,0 +1,99 @@
+name: Phase 2 Database Integrity
+
+on:
+  push:
+    branches:
+      - phase/2-database-integrity-rpc-repair
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/seed.sql"
+      - "supabase/tests/**"
+      - "src/lib/supabase/database.types.ts"
+      - "scripts/verify-phase2-rpc-repair.mjs"
+      - "scripts/compare-phase2-types.mjs"
+      - ".github/workflows/phase2-database-integrity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-rpc-repair:
+    name: Cold rebuild and lint RPC repairs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: latest
+          github-token: ${{ github.token }}
+
+      - name: Verify committed Phase 2 artifacts
+        run: node scripts/verify-phase2-rpc-repair.mjs
+
+      - name: Create isolated Supabase project
+        shell: bash
+        run: |
+          rm -rf .phase2
+          mkdir -p .phase2
+          cd .phase2
+          supabase init
+
+          rm -rf supabase/migrations
+          mkdir -p supabase/migrations supabase/tests
+          cp ../supabase/migrations/*.sql supabase/migrations/
+          cp ../supabase/seed.sql supabase/seed.sql
+          cp ../supabase/tests/*.sql supabase/tests/
+
+      - name: Start fresh database from all migrations
+        working-directory: .phase2
+        run: supabase db start
+
+      - name: Run all database tests
+        working-directory: .phase2
+        run: supabase test db
+
+      - name: Fail on public PL/pgSQL warnings
+        working-directory: .phase2
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          supabase db lint --local --schema public --level warning --fail-on warning \
+            | tee artifacts/db_lint.txt
+
+      - name: Generate database types
+        working-directory: .phase2
+        run: supabase gen types typescript --local --schema public > database.types.local.ts
+
+      - name: Verify public contract is unchanged
+        run: node scripts/compare-phase2-types.mjs
+
+      - name: Capture Phase 2 evidence
+        working-directory: .phase2
+        shell: bash
+        run: |
+          supabase db dump --local --schema public \
+            -f artifacts/rebuilt_public_schema.sql
+          supabase migration list --local \
+            > artifacts/local_migration_list.txt
+          cp database.types.local.ts artifacts/
+          cp supabase/tests/phase2_rpc_integrity_test.sql artifacts/
+          sha256sum artifacts/* > artifacts/SHA256SUMS.txt
+
+      - name: Upload Phase 2 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gym-crew-phase2-database-integrity
+          path: .phase2/artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop local Supabase
+        if: always()
+        working-directory: .phase2
+        run: supabase stop --no-backup || true

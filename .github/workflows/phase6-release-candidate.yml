@@ -1,0 +1,117 @@
+name: Phase 6 Release Candidate
+
+on:
+  push:
+    branches:
+      - "phase/6-*"
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "app.config.js"
+      - "eas.json"
+      - ".easignore"
+      - "android/app/build.gradle"
+      - "android/app/src/main/AndroidManifest.xml"
+      - "src/**"
+      - "scripts/phase6-**"
+      - "scripts/verify-phase6-release.mjs"
+      - "VERIFY_PHASE6_RELEASE.cmd"
+      - "README.md"
+      - "docs/PHASE_6_QA_RELEASE.md"
+      - "docs/PHYSICAL_DEVICE_RELEASE_CHECKLIST.md"
+      - ".github/workflows/phase6-release-candidate.yml"
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "app.config.js"
+      - "eas.json"
+      - ".easignore"
+      - "android/**"
+      - "src/**"
+      - "scripts/**"
+      - "VERIFY_PHASE6_RELEASE.cmd"
+      - "README.md"
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-release-candidate:
+    name: Validate Android release candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts
+
+      - name: Verify Phase 6 contract
+        run: npm run verify:phase6 | tee artifacts/phase6-verification.txt
+
+      - name: Test release policy
+        run: npm run test:release-policy | tee artifacts/release-policy-tests.txt
+
+      - name: Regression contracts
+        run: |
+          npm run verify:phase4 | tee artifacts/phase4-offline-regression.txt
+          npm run verify:phase4-null-safety | tee artifacts/phase4-null-regression.txt
+          npm run test:offline-policy | tee artifacts/offline-policy-tests.txt
+          npm run verify:phase5 | tee artifacts/phase5-product-regression.txt
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Check Expo dependency alignment
+        run: npx expo install --check
+
+      - name: Resolve Expo public config
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-publishable-key
+          EXPO_PUBLIC_WEB_API_URL: https://example.com
+        run: npx expo config --type public > artifacts/expo-public-config.txt
+
+      - name: Export Android JavaScript bundle
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-publishable-key
+          EXPO_PUBLIC_WEB_API_URL: https://example.com
+        run: |
+          rm -rf dist/phase6-android
+          npx expo export --platform android --output-dir dist/phase6-android
+          find dist/phase6-android -maxdepth 3 -type f -printf "%P\n" | sort > artifacts/android-export-files.txt
+          du -sh dist/phase6-android > artifacts/android-export-size.txt
+
+      - name: Capture release identity
+        run: |
+          node -e 'const p=require("./package.json"); console.log(`version=${p.version}`)' > artifacts/release-identity.txt
+          grep -E "versionCode|versionName" android/app/build.gradle >> artifacts/release-identity.txt
+          grep -E "uses-permission" android/app/src/main/AndroidManifest.xml >> artifacts/android-permissions.txt
+
+      - name: Upload Phase 6 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gym-crew-phase6-release-candidate
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30

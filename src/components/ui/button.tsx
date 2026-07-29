@@ -1,33 +1,58 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import { ActivityIndicator, Pressable, type PressableProps, View } from "react-native";
+import * as Haptics from "expo-haptics";
 import { AppText } from "./app-text";
 import { radii, spacing } from "@/lib/theme/tokens";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
+import { useSettingsStore } from "@/stores/settings-store";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger" | "success";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "success" | "dark";
 
 interface ButtonProps extends PressableProps {
   variant?: Variant;
   loading?: boolean;
   icon?: ReactNode;
+  trailingIcon?: ReactNode;
   compact?: boolean;
 }
 
-export function Button({ children, variant = "primary", loading = false, icon, compact = false, disabled, style, ...props }: PropsWithChildren<ButtonProps>) {
-  const { colors } = useAppTheme();
+export function Button({ children, variant = "primary", loading = false, icon, trailingIcon, compact = false, disabled, style, onPress, ...props }: PropsWithChildren<ButtonProps>) {
+  const { colors, resolved } = useAppTheme();
   const { rowDirection } = useTranslation();
-  const background = variant === "primary" ? colors.primary : variant === "danger" ? colors.danger : variant === "success" ? colors.success : variant === "secondary" ? colors.surfaceMuted : "transparent";
-  const border = variant === "secondary" ? colors.borderStrong : "transparent";
-  const textColor = variant === "primary" || variant === "danger" || variant === "success" ? colors.white : colors.text;
+  const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
+  const background = variant === "primary"
+    ? colors.primary
+    : variant === "danger"
+      ? colors.danger
+      : variant === "success"
+        ? colors.success
+        : variant === "dark"
+          ? colors.surfaceGlass
+          : variant === "secondary"
+            ? colors.surfaceMuted
+            : "transparent";
+  const outlined = variant === "secondary" || variant === "ghost" || variant === "dark";
+  const border = variant === "dark" ? colors.glassBorder : colors.borderStrong;
+  const textColor = variant === "primary"
+    ? colors.primaryInk
+    : variant === "danger" || variant === "success"
+      ? colors.white
+      : colors.text;
+
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled || loading), busy: loading }}
       disabled={disabled || loading}
+      onPress={(event) => {
+        if (hapticsEnabled) void Haptics.selectionAsync();
+        onPress?.(event);
+      }}
       {...props}
       style={({ pressed }) => [
         {
-          minHeight: compact ? 42 : 54,
+          minHeight: compact ? 44 : 54,
           borderRadius: compact ? radii.md : radii.lg,
           paddingHorizontal: compact ? spacing.md : spacing.lg,
           alignItems: "center",
@@ -36,13 +61,13 @@ export function Button({ children, variant = "primary", loading = false, icon, c
           gap: spacing.sm,
           backgroundColor: background,
           borderColor: border,
-          borderWidth: variant === "secondary" ? 1 : 0,
-          opacity: disabled ? 0.45 : pressed ? 0.84 : 1,
+          borderWidth: outlined ? 1 : 0,
+          opacity: disabled ? 0.38 : pressed ? 0.8 : 1,
           transform: [{ scale: pressed && !disabled ? 0.985 : 1 }],
           minWidth: 0,
-          shadowColor: variant === "primary" ? colors.primary : colors.shadow,
-          shadowOpacity: variant === "primary" ? 0.18 : 0,
-          shadowRadius: 12,
+          shadowColor: colors.shadow,
+          shadowOpacity: variant === "primary" ? (resolved === "dark" ? 0.26 : 0.12) : 0,
+          shadowRadius: variant === "primary" ? 13 : 0,
           shadowOffset: { width: 0, height: 7 },
           elevation: variant === "primary" ? 2 : 0,
         },
@@ -52,6 +77,7 @@ export function Button({ children, variant = "primary", loading = false, icon, c
       {loading ? <ActivityIndicator color={textColor} /> : null}
       {!loading && icon ? <View>{icon}</View> : null}
       {!loading ? <AppText variant="bodyStrong" align="center" style={{ color: textColor, flexShrink: 1 }}>{children}</AppText> : null}
+      {!loading && trailingIcon ? <View>{trailingIcon}</View> : null}
     </Pressable>
   );
 }

@@ -43,3 +43,17 @@ Thumbs.db
 
 # Archives generated locally
 *.zip
+
+# Patch packaging safeguards
+files/
+APPLY_PATCH.cmd
+VERIFY_PATCH.cmd
+SQL_TO_RUN_IN_SUPABASE.sql
+FILES_CHANGED.txt
+*_PATCH*
+supabase/.temp/
+
+# Phase 4 generated policy test output
+.phase4-test/
+
+.phase7-test/

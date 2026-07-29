@@ -1,0 +1,108 @@
+name: Phase 9 Final Product Release
+
+on:
+  push:
+    branches:
+      - "phase/9-*"
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "app.config.js"
+      - "android/**"
+      - "src/**"
+      - "scripts/**"
+      - "VERIFY_PHASE9_FINAL.cmd"
+      - "docs/PHASE_9_FINAL_PRODUCT_RELEASE.md"
+      - ".github/workflows/phase9-final-product-release.yml"
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "app.config.js"
+      - "android/**"
+      - "src/**"
+      - "scripts/**"
+      - "VERIFY_PHASE9_FINAL.cmd"
+      - "docs/**"
+      - ".github/workflows/phase9-final-product-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-final-product:
+    name: Validate OVRLD 1.4 final product
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts
+
+      - name: Verify Phase 9 product contract
+        run: npm run verify:phase9 | tee artifacts/phase9-product-verification.txt
+
+      - name: Test smart set recommendations
+        run: npm run test:smart-presets | tee artifacts/phase9-smart-preset-tests.txt
+
+      - name: Run offline regression contracts
+        run: |
+          npm run verify:phase4 | tee artifacts/phase4-offline-regression.txt
+          npm run verify:phase4-null-safety | tee artifacts/phase4-null-regression.txt
+          npm run test:offline-policy | tee artifacts/offline-policy-tests.txt
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Check Expo dependency alignment
+        run: npx expo install --check
+
+      - name: Resolve Expo public config
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-publishable-key
+          EXPO_PUBLIC_WEB_API_URL: https://example.com
+        run: npx expo config --type public > artifacts/expo-public-config.txt
+
+      - name: Export Android JavaScript bundle
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-publishable-key
+          EXPO_PUBLIC_WEB_API_URL: https://example.com
+        run: |
+          rm -rf dist/phase9-android
+          npx expo export --platform android --output-dir dist/phase9-android
+          find dist/phase9-android -maxdepth 3 -type f -printf "%P\n" | sort > artifacts/android-export-files.txt
+          du -sh dist/phase9-android > artifacts/android-export-size.txt
+
+      - name: Capture release identity
+        run: |
+          node -e 'const p=require("./package.json"); console.log(`name=${p.name}\nversion=${p.version}`)' > artifacts/release-identity.txt
+          grep -E "versionCode|versionName" android/app/build.gradle >> artifacts/release-identity.txt
+
+      - name: Upload Phase 9 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ovrld-phase9-final-product
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30

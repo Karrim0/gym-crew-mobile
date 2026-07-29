@@ -14,12 +14,16 @@ import { formatShortDate } from "@/lib/utils/date";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
 import { spacing } from "@/lib/theme/tokens";
+import { formatWeight, fromKilograms } from "@/lib/utils/weight";
+import { workoutDurationMinutes } from "@/lib/utils/workout-duration";
+import { useSettingsStore } from "@/stores/settings-store";
 import type { WorkoutSessionWithDetails } from "@/types";
 
 export default function WorkoutHistoryDetailsScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
   const { colors } = useAppTheme();
+  const weightUnit = useSettingsStore((state) => state.weightUnit);
   const { language, rowDirection, isRTL, t } = useTranslation();
   const [session, setSession] = useState<WorkoutSessionWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +51,7 @@ export default function WorkoutHistoryDetailsScreen() {
     return {
       sets: sets.length,
       volume: sets.reduce((sum, set) => sum + (set.weightKg ?? 0) * (set.reps ?? 0), 0),
-      minutes: Math.max(1, Math.round((session?.durationSeconds ?? 0) / 60)),
+      minutes: session ? workoutDurationMinutes(session) : 0,
     };
   }, [session]);
 
@@ -64,7 +68,7 @@ export default function WorkoutHistoryDetailsScreen() {
         </View>
       </View>
 
-      <Card style={{ gap: spacing.lg, backgroundColor: colors.primarySofter, borderColor: colors.primarySoft }}>
+      <Card variant="glass" style={{ gap: spacing.lg }}>
         <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
           <View style={{ width: 62, height: 62, borderRadius: 21, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}><CalendarDays size={29} color={colors.primary} /></View>
           <View style={{ flex: 1, minWidth: 0 }}><AppText variant="title3">{formatShortDate(session.scheduledDate, language)}</AppText><AppText color="muted">{session.exercises.length} {t("common.exercises")}</AppText></View>
@@ -72,8 +76,8 @@ export default function WorkoutHistoryDetailsScreen() {
         <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: spacing.sm }}>
           {[
             { icon: Layers3, value: summary.sets, label: t("common.sets") },
-            { icon: TimerReset, value: summary.minutes, label: t("common.minutes") },
-            { icon: Dumbbell, value: Math.round(summary.volume).toLocaleString(), label: language === "ar" ? "فوليوم" : "Volume" },
+            { icon: TimerReset, value: summary.minutes || "—", label: t("common.minutes") },
+            { icon: Dumbbell, value: Math.round(fromKilograms(summary.volume, weightUnit) ?? 0).toLocaleString(), label: `${weightUnit} ${language === "ar" ? "فوليوم" : "volume"}` },
           ].map(({ icon: Icon, value, label }) => (
             <View key={label} style={{ flexGrow: 1, flexBasis: 90, backgroundColor: colors.surface, borderRadius: 16, padding: 12, gap: 4 }}>
               <Icon size={18} color={colors.primary} /><AppText variant="bodyStrong">{value}</AppText><AppText variant="caption" color="muted">{label}</AppText>
@@ -86,7 +90,7 @@ export default function WorkoutHistoryDetailsScreen() {
         {session.exercises.map((exercise, exerciseIndex) => {
           const completed = exercise.sets.filter((set) => set.isCompleted);
           return (
-            <Card key={exercise.id} elevated={false} style={{ gap: spacing.md }}>
+            <Card key={exercise.id} variant="glass" elevated={false} style={{ gap: spacing.md }}>
               <View style={{ flexDirection: rowDirection, alignItems: "center", gap: spacing.md }}>
                 <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}><AppText variant="bodyStrong" color="primary">{exerciseIndex + 1}</AppText></View>
                 <View style={{ flex: 1, minWidth: 0 }}><AppText variant="bodyStrong" numberOfLines={2}>{exercise.exercise.name}</AppText><AppText variant="small" color="muted">{completed.length} {t("common.sets")}</AppText></View>
@@ -97,7 +101,7 @@ export default function WorkoutHistoryDetailsScreen() {
                     <View key={set.id} style={{ gap: 5, backgroundColor: colors.surfaceMuted, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 }}>
                       <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: spacing.md, minHeight: 30 }}>
                         <AppText variant="smallBold" color="muted">{language === "ar" ? `سِت ${set.setNumber}` : `Set ${set.setNumber}`}</AppText>
-                        <AppText variant="bodyStrong">{set.weightKg ?? 0} {t("common.kg")} × {set.reps ?? 0}</AppText>
+                        <AppText variant="bodyStrong">{formatWeight(set.weightKg, weightUnit)} × {set.reps ?? 0}</AppText>
                       </View>
                       {set.notes ? <AppText variant="caption" color="muted">📝 {set.notes}</AppText> : null}
                     </View>

@@ -1,7 +1,8 @@
 import { supabase } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/database.types";
-import { cacheValue, readCachedValue } from "@/lib/offline/database";
-import { getTrainingWeekRange, normalizeISODateOnly, toISODateOnly } from "@/lib/utils/date";
+import { cacheValue, readCachedValue, removeCachedValue, removeCachedValuesLike } from "@/lib/offline/database";
+import { isNetworkAvailable } from "@/lib/offline/network";
+import { addDays, getTrainingWeekRange, normalizeISODateOnly, todayISODateOnly, toISODateOnly, weekdayOrder } from "@/lib/utils/date";
 import type {
   Exercise,
   SplitDayColorKey,
@@ -13,14 +14,14 @@ import type {
   WeeklyScheduleDayWithDetails,
   WorkoutType,
 } from "@/types";
-import { mapExercise } from "./exercise-service";
+import { isExercise, isExerciseRow, mapExercise, unavailableExercise } from "./exercise-service";
 
 type SplitDayRow = Tables<"split_days">;
 type SplitExerciseRow = Tables<"split_exercises">;
 type ExerciseRow = Tables<"exercises">;
 type WeeklyScheduleRow = Tables<"weekly_schedule_days">;
-type SplitExerciseQueryRow = SplitExerciseRow & { exercises: ExerciseRow };
-type SplitDayQueryRow = SplitDayRow & { split_exercises: SplitExerciseQueryRow[] };
+type SplitExerciseQueryRow = SplitExerciseRow & { exercises: ExerciseRow | null };
+type SplitDayQueryRow = SplitDayRow & { split_exercises: SplitExerciseQueryRow[] | null };
 type WeeklyScheduleQueryRow = WeeklyScheduleRow & { split_days: SplitDayQueryRow | null };
 
 export type SplitTemplateKey = "manual" | "full_body_3" | "upper_lower_4" | "ppl_ul_5" | "ppl_6" | "girls_strength_4";
@@ -35,11 +36,14 @@ function mapSplitExercise(row: SplitExerciseQueryRow): SplitExerciseWithDetails 
     targetRepsMin: row.target_reps_min,
     targetRepsMax: row.target_reps_max,
     isPersonalAddition: row.is_personal_addition,
-    exercise: mapExercise(row.exercises),
+    exercise: isExerciseRow(row.exercises)
+      ? mapExercise(row.exercises)
+      : unavailableExercise(row.exercise_id),
   };
 }
 
 function mapSplitDay(row: SplitDayQueryRow): SplitDayWithDetails {
+  const rows = Array.isArray(row.split_exercises) ? row.split_exercises : [];
   return {
     id: row.id,
     groupId: row.group_id,
@@ -51,9 +55,66 @@ function mapSplitDay(row: SplitDayQueryRow): SplitDayWithDetails {
     iconKey: row.icon_key as SplitDayIconKey,
     colorKey: row.color_key as SplitDayColorKey,
     dayNotes: row.day_notes,
-    exercises: [...row.split_exercises].sort((a, b) => a.position - b.position).map(mapSplitExercise),
+    exercises: [...rows]
+      .sort((a, b) => a.position - b.position)
+      .map(mapSplitExercise),
   };
 }
+
+function sanitizeCachedSplit(value: SplitDayWithDetails[] | null) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((day): day is SplitDayWithDetails => Boolean(day && typeof day.id === "string" && typeof day.weekday === "string"))
+    .map((day) => ({
+      ...day,
+      exercises: Array.isArray(day.exercises)
+        ? day.exercises
+            .filter((entry) => Boolean(
+              entry &&
+                typeof entry.id === "string" &&
+                typeof entry.exerciseId === "string",
+            ))
+            .map((entry) => ({
+              ...entry,
+              exercise: isExercise(entry.exercise)
+                ? entry.exercise
+                : unavailableExercise(entry.exerciseId),
+            }))
+        : [],
+    }));
+}
+
+function sortSplit(days: SplitDayWithDetails[]) {
+  return [...days].sort((a, b) => weekdayOrder.indexOf(a.weekday) - weekdayOrder.indexOf(b.weekday));
+}
+
+function sanitizeCachedSchedule(value: WeeklyScheduleDayWithDetails[] | null) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((day): day is WeeklyScheduleDayWithDetails => Boolean(
+      day && typeof day.id === "string" && typeof day.scheduleDate === "string",
+    ))
+    .map((day) => {
+      const sourceDay = day.sourceDay
+        ? sanitizeCachedSplit([day.sourceDay])[0] ?? null
+        : null;
+      return {
+        ...day,
+        sourceDay,
+        exercises: sourceDay?.exercises ?? (Array.isArray(day.exercises)
+          ? day.exercises
+              .filter((entry) => Boolean(entry && typeof entry.exerciseId === "string"))
+              .map((entry) => ({
+                ...entry,
+                exercise: isExercise(entry.exercise)
+                  ? entry.exercise
+                  : unavailableExercise(entry.exerciseId),
+              }))
+          : []),
+      };
+    });
+}
+
 
 function mapWeekly(row: WeeklyScheduleQueryRow): WeeklyScheduleDayWithDetails {
   const sourceDay = row.split_days ? mapSplitDay(row.split_days) : null;
@@ -75,33 +136,87 @@ function mapWeekly(row: WeeklyScheduleQueryRow): WeeklyScheduleDayWithDetails {
   };
 }
 
+function buildWeekFromSplit(userId: UUID, split: SplitDayWithDetails[], anchorDate = todayISODateOnly()) {
+  const normalizedAnchor = normalizeISODateOnly(anchorDate);
+  const { start, startISO } = getTrainingWeekRange(normalizedAnchor);
+  const byWeekday = new Map(split.map((day) => [day.weekday, day]));
+  const schedule = weekdayOrder.map((weekday, index): WeeklyScheduleDayWithDetails => {
+    const sourceDay = byWeekday.get(weekday) ?? null;
+    const scheduleDate = toISODateOnly(addDays(start, index));
+    return {
+      id: `local-week-${userId}-${scheduleDate}`,
+      userId,
+      groupId: sourceDay?.groupId ?? "",
+      scheduleDate,
+      sourceSplitDayId: sourceDay?.id ?? null,
+      workoutType: sourceDay?.workoutType ?? "rest",
+      displayName: sourceDay?.displayName ?? "Rest",
+      focusLabel: sourceDay?.focusLabel ?? "",
+      iconKey: sourceDay?.iconKey ?? "moon",
+      colorKey: sourceDay?.colorKey ?? "blue",
+      dayNotes: sourceDay?.dayNotes ?? "",
+      isCustomized: false,
+      sourceDay,
+      exercises: sourceDay?.exercises ?? [],
+    };
+  });
+  return { schedule, cacheKey: `week-schedule:${userId}:${startISO}` };
+}
+
+export async function cacheWeekFromPersonalSplit(userId: UUID, split: SplitDayWithDetails[], anchorDate = todayISODateOnly()) {
+  const { schedule, cacheKey } = buildWeekFromSplit(userId, sortSplit(split), anchorDate);
+  await cacheValue(cacheKey, schedule);
+  return schedule;
+}
+
+export async function invalidateSplitCaches(userId: UUID) {
+  await Promise.all([
+    removeCachedValue(`personal-split:${userId}`),
+    removeCachedValuesLike(`week-schedule:${userId}:%`),
+  ]);
+}
+
 export async function fetchPersonalSplit(userId: UUID): Promise<SplitDayWithDetails[]> {
   const cacheKey = `personal-split:${userId}`;
+  const online = await isNetworkAvailable();
+  if (!online) {
+    const cached = sanitizeCachedSplit(await readCachedValue<SplitDayWithDetails[]>(cacheKey));
+    if (cached.length) return sortSplit(cached);
+    throw new Error("افتح الجدول مرة واحدة بالإنترنت علشان يبقى متاح أوفلاين.");
+  }
+
   try {
     const { error: ensureError } = await supabase.rpc("ensure_personal_split");
     if (ensureError) throw ensureError;
     const { data, error } = await supabase
       .from("split_days")
       .select("*, split_exercises(*, exercises(*))")
-      .eq("owner_user_id", userId)
-      .order("created_at", { ascending: true });
+      .eq("owner_user_id", userId);
     if (error) throw error;
-    const split = (data as unknown as SplitDayQueryRow[]).map(mapSplitDay);
+    const split = sortSplit((data as unknown as SplitDayQueryRow[]).map(mapSplitDay));
     await cacheValue(cacheKey, split);
     return split;
   } catch (caught) {
-    const cached = await readCachedValue<SplitDayWithDetails[]>(cacheKey);
-    if (cached?.length) return cached;
+    const cached = sanitizeCachedSplit(await readCachedValue<SplitDayWithDetails[]>(cacheKey));
+    if (cached.length) return sortSplit(cached);
     throw caught;
   }
 }
 
-export async function fetchEffectiveWeekSchedule(userId: UUID, anchorDate = toISODateOnly()) {
+export async function fetchEffectiveWeekSchedule(userId: UUID, anchorDate = todayISODateOnly()) {
   const normalizedAnchor = normalizeISODateOnly(anchorDate);
   const { startISO, endISO } = getTrainingWeekRange(normalizedAnchor);
-  // Cache by training week, not by the day that happened to request it. This
-  // keeps the same cached plan usable after midnight while the week is active.
   const cacheKey = `week-schedule:${userId}:${startISO}`;
+  const online = await isNetworkAvailable();
+
+  if (!online) {
+    const cached = sanitizeCachedSchedule(await readCachedValue<WeeklyScheduleDayWithDetails[]>(cacheKey));
+    if (cached.length) return cached;
+    const personal = sanitizeCachedSplit(await readCachedValue<SplitDayWithDetails[]>(`personal-split:${userId}`));
+    if (personal.length) return cacheWeekFromPersonalSplit(userId, personal, normalizedAnchor);
+    throw new Error("افتح جدولك مرة واحدة بالإنترنت قبل استخدامه أوفلاين.");
+  }
+
   try {
     const { error: ensureError } = await supabase.rpc("ensure_week_schedule", { target_anchor_date: normalizedAnchor });
     if (ensureError) throw ensureError;
@@ -114,28 +229,64 @@ export async function fetchEffectiveWeekSchedule(userId: UUID, anchorDate = toIS
       .order("schedule_date", { ascending: true });
     if (error) throw error;
     const schedule = (data as unknown as WeeklyScheduleQueryRow[]).map(mapWeekly);
-    await cacheValue(cacheKey, schedule);
+    if (schedule.length) await cacheValue(cacheKey, schedule);
     return schedule;
   } catch (caught) {
-    const cached = await readCachedValue<WeeklyScheduleDayWithDetails[]>(cacheKey);
-    if (cached?.length) return cached;
+    const cached = sanitizeCachedSchedule(await readCachedValue<WeeklyScheduleDayWithDetails[]>(cacheKey));
+    if (cached.length) return cached;
+    const personal = sanitizeCachedSplit(await readCachedValue<SplitDayWithDetails[]>(`personal-split:${userId}`));
+    if (personal.length) return cacheWeekFromPersonalSplit(userId, personal, normalizedAnchor);
     throw caught;
   }
 }
 
-export async function applySplitTemplate(template: SplitTemplateKey) {
-  const result = template === "girls_strength_4"
-    ? await supabase.rpc("apply_girls_strength_4_template")
-    : await supabase.rpc("apply_split_template", { target_template_key: template });
-  if (result.error) throw new Error(result.error.message);
+async function applyGirlsTemplateRpc() {
+  const v3 = await supabase.rpc("apply_girls_strength_4_template_v3");
+  if (!v3.error) return;
+  const missingV3 = /function .*apply_girls_strength_4_template_v3|schema cache/i.test(v3.error.message);
+  if (!missingV3) throw v3.error;
+
+  const v2 = await supabase.rpc("apply_girls_strength_4_template_v2");
+  if (!v2.error) return;
+  const missingV2 = /function .*apply_girls_strength_4_template_v2|schema cache/i.test(v2.error.message);
+  if (!missingV2) throw v2.error;
+
+  const legacy = await supabase.rpc("apply_girls_strength_4_template");
+  if (legacy.error) throw legacy.error;
 }
 
-export async function reorderPersonalSplitDays(orderedDayIds: UUID[]) {
-  if (orderedDayIds.length !== 7 || new Set(orderedDayIds).size !== 7) {
-    throw new Error("لازم ترتّب أيام الأسبوع السبعة.");
+export async function applySplitTemplate(userId: UUID, template: SplitTemplateKey) {
+  if (!(await isNetworkAvailable())) throw new Error("تعديل الجدول محتاج إنترنت. تمريناتك المسجلة أوفلاين هتفضل محفوظة.");
+
+  if (template === "girls_strength_4") {
+    await applyGirlsTemplateRpc();
+  } else {
+    const result = await supabase.rpc("apply_split_template", { target_template_key: template });
+    if (result.error) throw new Error(result.error.message);
   }
+
+  await invalidateSplitCaches(userId);
+  const updated = await fetchPersonalSplit(userId);
+  await cacheWeekFromPersonalSplit(userId, updated);
+
+  if (template === "girls_strength_4") {
+    const girlsDays = updated.filter((day) => /^Girls Day [1-4]$/.test(day.displayName ?? "") && day.workoutType !== "rest");
+    const appliedExercises = girlsDays.reduce((sum, day) => sum + day.exercises.length, 0);
+    if (girlsDays.length !== 4 || appliedExercises !== 25) {
+      throw new Error("القالب ما اتطبقش كامل. شغّل ملف SQL المرفق للنسخة الجديدة وجرب تاني.");
+    }
+  }
+
+  void fetchEffectiveWeekSchedule(userId).catch(() => undefined);
+  return updated;
+}
+
+export async function reorderPersonalSplitDays(userId: UUID, orderedDayIds: UUID[]) {
+  if (orderedDayIds.length !== 7 || new Set(orderedDayIds).size !== 7) throw new Error("لازم ترتّب أيام الأسبوع السبعة.");
+  if (!(await isNetworkAvailable())) throw new Error("ترتيب الجدول محتاج إنترنت.");
   const { error } = await supabase.rpc("reorder_personal_split_days", { target_ordered_day_ids: orderedDayIds });
   if (error) throw new Error(error.message);
+  await invalidateSplitCaches(userId);
 }
 
 export async function updateSplitDay(input: {
@@ -203,7 +354,7 @@ export async function addSplitExercise(input: {
       split_day_id: input.splitDayId,
       exercise_id: input.exercise.id,
       position,
-      target_sets: input.targetSets ?? 3,
+      target_sets: input.targetSets ?? 2,
       target_reps_min: input.targetRepsMin ?? 8,
       target_reps_max: input.targetRepsMax ?? 12,
       is_personal_addition: true,
@@ -237,9 +388,7 @@ export async function removeSplitExercise(id: UUID) {
 }
 
 export async function reorderSplitExercises(splitDayId: UUID, orderedIds: UUID[]) {
-  const updates = orderedIds.map((id, position) =>
-    supabase.from("split_exercises").update({ position }).eq("id", id).eq("split_day_id", splitDayId),
-  );
+  const updates = orderedIds.map((id, position) => supabase.from("split_exercises").update({ position }).eq("id", id).eq("split_day_id", splitDayId));
   const results = await Promise.all(updates);
   const failed = results.find((result) => result.error);
   if (failed?.error) throw new Error(failed.error.message);

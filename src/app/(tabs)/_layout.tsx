@@ -1,13 +1,29 @@
+import type { ReactNode } from "react";
 import { Tabs } from "expo-router";
-import { ChartNoAxesColumnIncreasing, Dumbbell, House, UsersRound, CalendarDays } from "lucide-react-native";
+import { BarChart3, CalendarDays, Dumbbell, House, UserRound, UsersRound } from "lucide-react-native";
+import { StyleSheet, View } from "react-native";
+import { BlurView } from "expo-blur";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+function TabIcon({ focused, icon }: { focused: boolean; icon: (color: string) => ReactNode }) {
+  const { colors } = useAppTheme();
+  const color = focused ? colors.primary : colors.textFaint;
+  return (
+    <View style={{ width: 34, height: 30, borderRadius: 12, alignItems: "center", justifyContent: "center" }}>
+      {icon(color)}
+      {focused ? <View style={{ position: "absolute", bottom: -4, width: 16, height: 3, borderRadius: 999, backgroundColor: colors.primary }} /> : null}
+    </View>
+  );
+}
 
 export default function TabsLayout() {
-  const { colors } = useAppTheme();
+  const { colors, resolved } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { t } = useTranslation();
+  const { language } = useTranslation();
+  const bottom = Math.max(insets.bottom, 8);
+
   return (
     <Tabs
       initialRouteName="home"
@@ -16,29 +32,73 @@ export default function TabsLayout() {
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textFaint,
+        tabBarBackground: () => (
+          <View style={StyleSheet.absoluteFill}>
+            <BlurView intensity={resolved === "dark" ? 34 : 54} tint={resolved} style={StyleSheet.absoluteFill} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.nav }]} />
+          </View>
+        ),
         tabBarStyle: {
-          backgroundColor: colors.nav,
-          borderTopColor: colors.border,
+          position: "absolute",
+          left: 12,
+          right: 12,
+          bottom,
+          height: 66,
+          paddingTop: 6,
+          paddingBottom: 6,
+          backgroundColor: "transparent",
+          borderColor: colors.glassBorder,
+          borderWidth: 1,
           borderTopWidth: 1,
-          height: 66 + Math.max(insets.bottom, 10),
-          paddingTop: 8,
-          paddingBottom: Math.max(insets.bottom, 10),
+          borderRadius: 24,
           shadowColor: colors.shadow,
-          shadowOpacity: 0.1,
-          shadowRadius: 20,
-          shadowOffset: { width: 0, height: -5 },
-          elevation: 12,
+          shadowOpacity: resolved === "dark" ? 0.46 : 0.12,
+          shadowRadius: 26,
+          shadowOffset: { width: 0, height: 13 },
+          elevation: 16,
+          overflow: "hidden",
         },
-        tabBarItemStyle: { borderRadius: 16, marginHorizontal: 2 },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "800", marginTop: 2 },
-        sceneStyle: { backgroundColor: colors.background },
+        tabBarItemStyle: { borderRadius: 16, marginHorizontal: 0 },
+        tabBarLabelStyle: { fontFamily: "Alexandria_600SemiBold", fontSize: 9.5, lineHeight: 14, marginTop: 1 },
+        sceneStyle: { backgroundColor: colors.background, paddingBottom: 80 + bottom },
       }}
     >
-      <Tabs.Screen name="home" options={{ title: t("tabs.home"), tabBarIcon: ({ color, size, focused }) => <House color={color} size={focused ? size + 2 : size} strokeWidth={focused ? 2.7 : 2} /> }} />
-      <Tabs.Screen name="split" options={{ title: t("tabs.split"), tabBarIcon: ({ color, size, focused }) => <CalendarDays color={color} size={focused ? size + 2 : size} strokeWidth={focused ? 2.7 : 2} /> }} />
-      <Tabs.Screen name="workout" options={{ title: t("tabs.workout"), tabBarIcon: ({ color, size, focused }) => <Dumbbell color={color} size={focused ? size + 2 : size} strokeWidth={focused ? 2.7 : 2} /> }} />
-      <Tabs.Screen name="crew" options={{ title: t("tabs.crew"), tabBarIcon: ({ color, size, focused }) => <UsersRound color={color} size={focused ? size + 2 : size} strokeWidth={focused ? 2.7 : 2} /> }} />
-      <Tabs.Screen name="progress" options={{ title: t("tabs.progress"), tabBarIcon: ({ color, size, focused }) => <ChartNoAxesColumnIncreasing color={color} size={focused ? size + 2 : size} strokeWidth={focused ? 2.7 : 2} /> }} />
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: language === "ar" ? "النهارده" : "Today",
+          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={(color) => <House color={color} fill={focused ? color : "transparent"} size={19} strokeWidth={focused ? 2.5 : 2.1} />} />,
+        }}
+      />
+      <Tabs.Screen
+        name="split"
+        options={{
+          title: language === "ar" ? "الخطة" : "Plan",
+          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={(color) => <CalendarDays color={color} size={19} strokeWidth={focused ? 2.6 : 2.1} />} />,
+        }}
+      />
+      <Tabs.Screen
+        name="workout"
+        options={{
+          title: language === "ar" ? "تمرّن" : "Train",
+          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={(color) => <Dumbbell color={color} size={20} strokeWidth={focused ? 2.8 : 2.1} />} />,
+        }}
+      />
+      <Tabs.Screen
+        name="progress"
+        options={{
+          title: language === "ar" ? "التقدم" : "Progress",
+          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={(color) => <BarChart3 color={color} size={19} strokeWidth={focused ? 2.7 : 2.1} />} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: language === "ar" ? "حسابي" : "Profile",
+          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={(color) => <UserRound color={color} fill={focused ? color : "transparent"} size={19} strokeWidth={focused ? 2.5 : 2.1} />} />,
+        }}
+      />
+      <Tabs.Screen name="crew" options={{ href: null, tabBarIcon: ({ color }) => <UsersRound color={color} /> }} />
     </Tabs>
   );
 }

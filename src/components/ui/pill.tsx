@@ -15,23 +15,22 @@ export function Pill({ children, selected = false, style, ...props }: PropsWithC
       {...props}
       style={({ pressed }) => [
         {
-          minHeight: 42,
+          minHeight: 40,
           minWidth: 48,
           borderRadius: radii.pill,
           borderWidth: 1,
           borderColor: selected ? colors.primary : colors.border,
-          backgroundColor: selected ? colors.primarySoft : colors.surface,
+          backgroundColor: selected ? colors.primarySoft : colors.surfaceGlass,
           alignItems: "center",
           justifyContent: "center",
           paddingHorizontal: spacing.md,
           opacity: pressed ? 0.78 : 1,
+          transform: [{ scale: pressed ? 0.98 : 1 }],
         },
         typeof style === "function" ? style({ pressed }) : style,
       ]}
     >
-      <AppText variant="smallBold" color={selected ? "primary" : "default"} align="center">
-        {children}
-      </AppText>
+      <AppText variant="smallBold" color={selected ? "primary" : "default"} align="center">{children}</AppText>
     </Pressable>
   );
 }

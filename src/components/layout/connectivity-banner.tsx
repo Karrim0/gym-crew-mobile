@@ -1,5 +1,11 @@
 import { Pressable, View } from "react-native";
-import { CloudOff, RefreshCw, UploadCloud } from "lucide-react-native";
+import {
+  ShieldAlert,
+  CircleHelp,
+  CloudOff,
+  RefreshCw,
+  UploadCloud,
+} from "lucide-react-native";
 import { AppText } from "@/components/ui/app-text";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import { useTranslation } from "@/lib/localization/use-translation";
@@ -8,35 +14,98 @@ import { useConnectivityStore } from "@/stores/connectivity-store";
 export function ConnectivityBanner() {
   const { colors } = useAppTheme();
   const { language, rowDirection } = useTranslation();
-  const isConnected = useConnectivityStore((state) => state.isConnected && state.isInternetReachable);
+  const networkStatus = useConnectivityStore((state) => state.networkStatus);
   const pending = useConnectivityStore((state) => state.pending);
+  const failed = useConnectivityStore((state) => state.failed);
   const syncing = useConnectivityStore((state) => state.syncing);
   const syncNow = useConnectivityStore((state) => state.syncNow);
-  if (isConnected && pending === 0 && !syncing) return null;
-  const offline = !isConnected;
-  const label = offline
-    ? (language === "ar" ? "أوفلاين — تمرينك بيتحفظ على الجهاز" : "Offline — your workout is saved on this device")
-    : syncing
-      ? (language === "ar" ? "بنزامن بياناتك..." : "Syncing your data...")
-      : (language === "ar" ? `${pending} تعديل مستني المزامنة` : `${pending} change${pending === 1 ? "" : "s"} waiting to sync`);
+  const retryFailed = useConnectivityStore((state) => state.retryFailed);
+
+  if (
+    networkStatus === "online" &&
+    pending === 0 &&
+    failed === 0 &&
+    !syncing
+  ) {
+    return null;
+  }
+
+  const offline = networkStatus === "offline";
+  const unknown = networkStatus === "unknown";
+  const hasFailed = failed > 0;
+
+  const label = hasFailed
+    ? language === "ar"
+      ? `${failed} تعديل محتاج إعادة محاولة`
+      : `${failed} changes need retry`
+    : offline
+      ? language === "ar"
+        ? "أوفلاين · تمرينك محفوظ"
+        : "Offline · workout saved"
+      : syncing
+        ? language === "ar"
+          ? "بنزامن التعديلات"
+          : "Syncing changes"
+        : unknown
+          ? language === "ar"
+            ? "الاتصال غير مؤكد · بياناتك آمنة"
+            : "Connection unknown · data is safe"
+          : language === "ar"
+            ? `${pending} تعديل مستني`
+            : `${pending} pending`;
+
+  const Icon = hasFailed
+    ? ShieldAlert
+    : offline
+      ? CloudOff
+      : syncing
+        ? RefreshCw
+        : unknown
+          ? CircleHelp
+          : UploadCloud;
+
+  const tone = hasFailed
+    ? colors.danger
+    : offline
+      ? colors.warning
+      : colors.info;
+  const backgroundColor = hasFailed
+    ? colors.dangerSoft
+    : offline
+      ? colors.warningSoft
+      : colors.infoSoft;
+
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityLiveRegion="polite"
+      accessibilityState={{ disabled: offline || syncing, busy: syncing }}
       disabled={offline || syncing}
-      onPress={() => void syncNow()}
-      style={{
+      onPress={() => void (hasFailed ? retryFailed() : syncNow(true))}
+      style={({ pressed }) => ({
+        alignSelf: "flex-start",
         flexDirection: rowDirection,
         alignItems: "center",
-        gap: 10,
-        backgroundColor: offline ? colors.warningSoft : colors.infoSoft,
-        borderColor: offline ? colors.warning : colors.info,
+        gap: 7,
+        backgroundColor,
+        borderColor: tone,
         borderWidth: 1,
-        borderRadius: 16,
-        paddingHorizontal: 14,
-        minHeight: 46,
-      }}
+        borderRadius: 999,
+        paddingHorizontal: 12,
+        minHeight: 34,
+        opacity: pressed ? 0.74 : 1,
+      })}
     >
-      {offline ? <CloudOff size={18} color={colors.warning} /> : syncing ? <RefreshCw size={18} color={colors.info} /> : <UploadCloud size={18} color={colors.info} />}
-      <View style={{ flex: 1, minWidth: 0 }}><AppText variant="smallBold" color={offline ? "warning" : "default"}>{label}</AppText></View>
+      <Icon size={14} color={tone} />
+      <View style={{ minWidth: 0 }}>
+        <AppText
+          variant="caption"
+          color={hasFailed ? "danger" : offline ? "warning" : "default"}
+        >
+          {label}
+        </AppText>
+      </View>
     </Pressable>
   );
 }
