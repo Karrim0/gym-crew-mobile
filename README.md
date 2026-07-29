@@ -1,63 +1,150 @@
 # OVRLD Mobile
 
-OVRLD is an offline-first personal training operating system built with React Native,
-Expo Router, TypeScript, Supabase, and SQLite. The individual athlete experience is
-the product core; workout crews are an optional social layer.
+**OVRLD** is an offline-first workout tracking application for iOS and Android.
 
-## Current release candidate: 1.4.0 (build 12)
+It helps athletes plan their training, run workout sessions, log sets with minimal interaction, track progressive overload, and review long-term progress.
 
-### Product architecture
+The individual training experience is the core of OVRLD. Crews are available as an optional social layer for accountability and friendly competition.
 
-- Five primary destinations: Today, Plan, Train, Progress, and Profile.
-- Today adapts to a scheduled workout, an open session, a recovery day, or a missing plan.
-- Plan contains the weekly schedule, active split, templates, and exercise library.
-- Train supports today’s workout, active-session resume, quick workout, and repeat previous workout.
-- Progress covers consistency, workout history, strongest performances, volume, and streaks.
-- Profile contains Crew, notifications, language, appearance, training preferences, and sync controls.
+## Latest Release
 
-### OVRLD product identity
+**OVRLD v1.4.0 — Build 12**
 
-- OVRLD Volt `#C8FF3D` is the single focused brand accent.
-- Dedicated dark and light theme surfaces.
-- Alexandria for Arabic/interface copy and Inter for weights, reps, timers, and metrics.
-- Arabic Egyptian and English with RTL/LTR layouts.
-- Updated adaptive icon, favicon, and splash mark.
+The Android APK is available from the repository's **Releases** section.
+
+## Core Features
+
+### Today
+
+- Adaptive daily training overview.
+- Scheduled workout state.
+- Active-session resume.
+- Recovery-day state.
+- Weekly consistency summary.
+- Recent achievements and upcoming workouts.
+
+### Plan
+
+- Weekly training schedule.
+- Ready-made workout splits.
+- Custom workout plans.
+- Exercise ordering and targets.
+- Rest-day management.
+- Exercise library and search.
+
+### Train
+
+- Start today's workout.
+- Resume an active session.
+- Create a quick workout.
+- Repeat a previous workout.
+- Review and adjust exercises before starting.
 
 ### Gym Mode
 
-- Inline pre-workout review instead of an interruptive ordering prompt.
-- Compact session and exercise context.
-- Completed, current, and upcoming set rows.
-- One primary performance recommendation with compact alternatives.
-- Manual weight/repetition entry and quick load controls.
-- Dynamic fixed logging action that displays the exact values being saved.
-- Optional one-tap logging, undo, extra sets, notes, reordering, and exercise selection.
-- Optional automatic rest timer with a non-blocking mini-player.
-- Live local-save and sync status.
+- Fast set logging designed for one-handed use.
+- Completed, current, and upcoming set tracking.
+- Weight and repetition controls.
+- Manual numeric entry.
+- Smart performance recommendations.
+- One-tap logging.
+- Set editing and undo.
+- Exercise notes.
+- Exercise reordering and skipping.
+- Automatic or manual rest timer.
+- Non-blocking rest timer mini-player.
+- Workout completion summary.
 
-### Offline reliability
+### Progress
 
-After one successful online warm-up, the app caches the profile, workspace,
-training plan, exercise library, active workout, history, and progress data.
-An active workout can be continued after force-close while offline. Mutations are
-queued in SQLite with idempotency keys, retry backoff, conflict rules, and a
-failed-change recovery path.
+- Workout history.
+- Training consistency.
+- Volume tracking.
+- Strength progress.
+- Personal records.
+- Exercise performance history.
+- Weekly, monthly, and quarterly views.
+
+### Crews
+
+- Optional workout groups.
+- Weekly activity ranking.
+- Workout completion updates.
+- Personal-record sharing.
+- Reactions and encouragement.
+- Group consistency tracking.
+
+### Offline-First Training
+
+After the initial online data load, OVRLD stores the user's essential training data locally.
+
+Users can:
+
+- Open their current plan offline.
+- Start and continue workouts offline.
+- Log and edit sets offline.
+- Use the rest timer offline.
+- Restore an active session after force-closing the app.
+- Complete a workout without internet access.
+
+Pending changes are stored in SQLite and synchronized when connectivity returns using retry rules, idempotency keys, and duplicate protection.
+
+## Languages and Appearance
+
+- Arabic with full RTL support.
+- English with LTR support.
+- Dark theme.
+- Light theme.
+- System theme.
+- Localized workout terminology.
+- Accessible touch targets and readable contrast.
+
+## Technology Stack
+
+- React Native
+- Expo
+- Expo Router
+- TypeScript
+- Supabase
+- SQLite
+- Zustand
+- EAS Build
+- GitHub Actions
+
+## Project Structure
+
+```text
+src/app                 Expo Router screens and routes
+src/components          Shared interface components
+src/features            Product services and feature modules
+src/lib/offline         SQLite cache and synchronization system
+src/lib/notifications   Rest timer and local notifications
+src/lib/theme           Design tokens and theme configuration
+src/stores              Application state stores
+src/types               Domain and database types
+supabase/migrations     Reproducible database migrations
+scripts                 Verification and quality scripts
+docs                    Product, phase, and release documentation
+```
 
 ## Requirements
 
 - Node.js 22 recommended
 - npm
 - Expo account for EAS cloud builds
-- OVRLD Supabase project with the committed migration chain applied
-- Android Studio only for local native builds or an emulator
+- Supabase project
+- Android Studio for local Android native builds or emulation
+- Xcode and macOS for local iOS native builds
 
-## Configure
+## Environment Configuration
+
+Copy the environment template:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Use public mobile values only:
+Add public application values only:
 
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
@@ -65,19 +152,25 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 EXPO_PUBLIC_WEB_API_URL=https://YOUR_WEB_APP.example
 ```
 
-Never put a service-role key, private API key, or signing credential in an
-`EXPO_PUBLIC_` variable.
+Never place service-role keys, signing credentials, or private API secrets inside variables prefixed with `EXPO_PUBLIC_`.
+
+## Installation
+
+```bash
+npm ci
+```
 
 ## Development
 
 ```bash
-npm ci
 npm run typecheck
 npm run lint
 npx expo start --dev-client --lan --clear
 ```
 
-## Phase 9 quality gate
+## Quality Verification
+
+Run the complete Phase 9 product verification:
 
 ```bash
 npm run phase9:check
@@ -86,59 +179,54 @@ npm run phase9:check
 On Windows:
 
 ```bat
-call VERIFY_PHASE9_FINAL.cmd
+VERIFY_PHASE9_FINAL.cmd
 ```
 
-The Phase 9 gate verifies:
+The verification process covers:
 
-- release identity `1.4.0` / build `12`;
-- Today / Plan / Train / Progress / Profile architecture;
-- Gym Mode preflight, set rows, recommendations, fixed action, and rest mini-player;
-- smart-set recommendation behavior and bodyweight guards;
-- offline reliability, null safety, retry, and idempotency regressions;
-- TypeScript, ESLint, Expo dependency alignment, public config, and Android export.
+- Product and release identity.
+- TypeScript.
+- ESLint.
+- Expo dependency alignment.
+- Android JavaScript export.
+- Smart set recommendation tests.
+- Bodyweight and null-value guards.
+- Offline reliability contracts.
+- Sync retry and idempotency rules.
+- Git whitespace validation.
 
-## Preview APK
+## Android Preview APK
 
 ```bash
 npx eas-cli@latest build --platform android --profile preview --clear-cache
 ```
 
-The preview profile produces a standalone APK for physical-device testing.
-Do not tag the release until dark/light, Arabic/English, Gym Mode, force-close,
-and offline-to-online synchronization checks pass on a physical device.
+The preview profile generates an APK that can be installed directly on Android devices.
 
-## Production Android build
+## Android Production Build
 
 ```bash
 npx eas-cli@latest build --platform android --profile production
 ```
 
-The production profile produces an Android App Bundle. Complete the physical
-release checklist before uploading it to a store track.
+The production profile generates an Android App Bundle for Google Play.
 
-## Architecture
+## Release Information
 
-```text
-src/app                 Expo Router screens
-src/components          Shared UI and Gym Mode components
-src/features            Auth, profile, crew, split, and workout services
-src/lib/offline         SQLite cache, network state, and mutation queue
-src/lib/notifications   Rest timer and local notifications
-src/stores              Session, settings, timer, notifications, connectivity
-src/types               Domain and generated Supabase types
-supabase/migrations     Reproducible database migration chain
-```
-
-## Release identity
-
-- Expo project: `kareem-hanafy`
-- Expo owner: `kaghim0s-team`
-- Android package: `com.karrim.gymcrew`
-- iOS bundle identifier: `com.karrim.gymcrew`
 - App version: `1.4.0`
 - Android version code: `12`
 - iOS build number: `12`
+- Android application ID: `com.karrim.gymcrew`
+- iOS bundle identifier: `com.karrim.gymcrew`
 
-See `docs/PHASE_9_FINAL_PRODUCT_RELEASE.md` and
-`docs/PHYSICAL_DEVICE_RELEASE_CHECKLIST.md` for the final handoff gates.
+## Documentation
+
+Important project documentation:
+
+- `docs/PHASE_9_FINAL_PRODUCT_RELEASE.md`
+- `docs/PHYSICAL_DEVICE_RELEASE_CHECKLIST.md`
+- `docs/FINAL_DELIVERY_PLAN.md`
+
+## License
+
+This project is licensed under the MIT License.
