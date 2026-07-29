@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   Minus,
   Plus,
+  Play,
   RotateCcw,
   Shuffle,
   StickyNote,
@@ -286,7 +287,9 @@ export default function GymModeScreen() {
           praise: setPraise(language, override?.presetKind ?? "manual"),
         });
         setSelectedPresetKind(null);
-        await timer.start(settings.defaultRestSeconds, refreshedExercise?.exercise.name ?? selected.exercise.name, `/workout/${session.id}`);
+        if (settings.autoStartRestTimerEnabled) {
+          await timer.start(settings.defaultRestSeconds, refreshedExercise?.exercise.name ?? selected.exercise.name, `/workout/${session.id}`);
+        }
         if (settings.hapticsEnabled) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       } catch (caught) { showError(friendlyError(caught)); }
     });
@@ -406,6 +409,40 @@ export default function GymModeScreen() {
   if (loading) return <Screen scroll={false}><LoadingState /></Screen>;
   if (error || !session || !selected) return <Screen><ErrorState message={error ?? (language === "ar" ? "التمرينة فاضية." : "Workout is empty.")} onRetry={() => void load()} /></Screen>;
 
+  if (preflightOpen) {
+    const plannedSets = session.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
+    return (
+      <Screen horizontalPadding={16}>
+        <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 10 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "الرجوع" : "Back"} onPress={() => router.replace("/(tabs)/workout")} style={({ pressed }) => ({ width: 42, height: 42, borderRadius: 15, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.68 : 1 })}>
+            {isRTL ? <ChevronLeft color={colors.text} size={20} /> : <ArrowLeft color={colors.text} size={20} />}
+          </Pressable>
+          <View style={{ flex: 1 }}><AppText variant="title2">{language === "ar" ? "راجع التمرينة" : "Review workout"}</AppText><AppText variant="small" color="muted">{language === "ar" ? "غيّر الترتيب أو ابدأ زي ما هي." : "Change the order or start as planned."}</AppText></View>
+        </View>
+
+        <Card variant="dark" style={{ padding: 18, gap: 16, borderColor: colors.borderStrong }}>
+          <View pointerEvents="none" style={{ position: "absolute", width: 190, height: 190, borderRadius: 95, backgroundColor: colors.glow, end: -90, top: -100 }} />
+          <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <View style={{ flex: 1, gap: 4 }}><AppText variant="overline" color="primary">{language === "ar" ? "جاهز تبدأ" : "READY TO START"}</AppText><AppText variant="title1" style={{ color: colors.textOnDark }}>{language === "ar" ? "تمرينة النهارده" : "Today's workout"}</AppText><AppText variant="small" style={{ color: colors.textOnDarkMuted }}>{session.exercises.length} {t("common.exercises")} · {plannedSets} {t("common.sets")}</AppText></View>
+            <View style={{ width: 58, height: 58, borderRadius: 19, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><Dumbbell color={colors.primaryInk} size={25} /></View>
+          </View>
+        </Card>
+
+        <View style={{ gap: 8 }}>
+          {session.exercises.map((exercise, index) => (
+            <Card key={exercise.id} variant="raised" elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: 12, padding: 13 }}>
+              <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: colors.primarySofter, alignItems: "center", justifyContent: "center" }}><AppText variant="smallBold" numeric color="primary">{index + 1}</AppText></View>
+              <View style={{ flex: 1, minWidth: 0 }}><AppText variant="bodyStrong" numberOfLines={1}>{exercise.exercise.name}</AppText><AppText variant="caption" color="muted">{exercise.sets.length} {t("common.sets")} · {exercise.targetRepsMin}–{exercise.targetRepsMax} {language === "ar" ? "عدة" : "reps"}</AppText></View>
+            </Card>
+          ))}
+        </View>
+
+        <Button icon={<Play fill={colors.primaryInk} color={colors.primaryInk} size={19} />} onPress={() => setPreflightOpen(false)}>{language === "ar" ? "ابدأ التمرين" : "Start workout"}</Button>
+        <Button variant="secondary" icon={<Shuffle color={colors.primary} size={19} />} onPress={openReorder}>{language === "ar" ? "غيّر ترتيب التمارين" : "Reorder exercises"}</Button>
+      </Screen>
+    );
+  }
+
   const incompleteSets = totalSets - completedSets;
   const completedExercises = session.exercises.filter((exercise) => completedCount(exercise) > 0).length;
   const volume = session.exercises.flatMap((exercise) => exercise.sets).filter((set) => set.isCompleted).reduce((sum, set) => sum + (set.weightKg ?? 0) * (set.reps ?? 0), 0);
@@ -425,6 +462,29 @@ export default function GymModeScreen() {
   const restRemaining = timer.active ? timer.getRemaining() : 0;
   const chosenPreset = smartPresets.find((preset) => preset.kind === selectedPresetKind) ?? null;
   const baselinePreset = previousTargetSet ?? latestCompletedSet ?? strongestPast;
+  const primaryPreset = smartPresets.find((preset) => preset.kind === "progress") ?? smartPresets[0] ?? null;
+  const alternativePresets = primaryPreset ? smartPresets.filter((preset) => preset.kind !== primaryPreset.kind) : [];
+  const recommendationAddsWeight = Boolean(
+    primaryPreset?.kind === "progress"
+      && baselinePreset?.weightKg !== null
+      && baselinePreset?.weightKg !== undefined
+      && primaryPreset.weightKg !== null
+      && primaryPreset.weightKg > baselinePreset.weightKg,
+  );
+  const recommendationTitle = primaryPreset?.kind === "repeat"
+    ? (language === "ar" ? "حافظ على الأداء" : "Repeat the performance")
+    : primaryPreset?.kind === "backoff"
+      ? (language === "ar" ? "خفّ الوزن" : "Use a back-off set")
+      : recommendationAddsWeight
+        ? (language === "ar" ? "زوّد الوزن" : "Add weight")
+        : (language === "ar" ? "زوّد عدة" : "Add one rep");
+  const recommendationReason = primaryPreset?.kind === "repeat"
+    ? (language === "ar" ? "آخر أداء مناسب، كرره بثبات." : "Your last performance is a solid target to repeat.")
+    : primaryPreset?.kind === "backoff"
+      ? (language === "ar" ? "خفف الحمل وحافظ على تحكم أحسن." : "Reduce the load and keep better control.")
+      : recommendationAddsWeight
+        ? (language === "ar" ? "وصلت لأعلى الرينج، فالخطوة الجاية زيادة الوزن." : "You reached the top of the range, so the next step is more load.")
+        : (language === "ar" ? "لسه جوه الرينج، زوّد عدة قبل زيادة الوزن." : "You are still inside the range, so add a rep before adding load.");
 
   function changeDisplayWeight(delta: number) {
     const current = fromKilograms(weight, settings.weightUnit) ?? 0;
@@ -433,18 +493,25 @@ export default function GymModeScreen() {
   }
 
   function changeReps(delta: number) {
-setReps((current) => {
-  const baseReps = current ?? selected?.targetRepsMin ?? 1;
+    setReps((current) => {
+      const baseReps = current ?? selected?.targetRepsMin ?? 1;
+      return Math.max(1, Math.min(1000, baseReps + delta));
+    });
+  }
 
-  return Math.max(1, Math.min(1000, baseReps + delta));
-});  }
+  const footerWeightLabel = weight === null
+    ? (selectedIsBodyweight ? (language === "ar" ? "وزن الجسم" : "BW") : "—")
+    : formatWeight(weight, settings.weightUnit);
+  const footerSetLabel = language === "ar"
+    ? `سجّل السِت — ${footerWeightLabel} × ${reps ?? "—"}`
+    : `Log set — ${footerWeightLabel} × ${reps ?? "—"}`;
 
   const footerAction = pendingSet && !lastLogged
     ? smartPresets.length > 0 && !manualEntryOpen
       ? settings.oneTapLoggingEnabled
         ? null
-        : <Button disabled={!chosenPreset} loading={saving} onPress={() => chosenPreset && reps !== null ? void logSet({ weightKg: weight, reps, presetKind: chosenPreset.kind }) : undefined} icon={<Check color={colors.primaryInk} size={22} />} style={{ minHeight: 60 }}>{language === "ar" ? "سجّل السِت" : "Log set"}</Button>
-      : <Button disabled={reps === null} loading={saving} onPress={() => void logSet()} icon={<Check color={colors.primaryInk} size={22} />} style={{ minHeight: 60 }}>{language === "ar" ? "خلصت السِت" : "Set done"}</Button>
+        : <Button disabled={!chosenPreset} loading={saving} onPress={() => chosenPreset && reps !== null ? void logSet({ weightKg: weight, reps, presetKind: chosenPreset.kind }) : undefined} icon={<Check color={colors.primaryInk} size={22} />} style={{ minHeight: 60 }}>{footerSetLabel}</Button>
+      : <Button disabled={reps === null} loading={saving} onPress={() => void logSet()} icon={<Check color={colors.primaryInk} size={22} />} style={{ minHeight: 60 }}>{footerSetLabel}</Button>
     : null;
 
   return (
@@ -500,6 +567,41 @@ setReps((current) => {
         {(networkStatus === "offline" || pendingSync > 0 || syncing) ? <View accessibilityLiveRegion="polite" style={{ flexDirection: rowDirection, alignItems: "center", gap: 6 }}><DataIcon size={14} color={networkStatus === "offline" ? colors.warning : colors.primary} /><AppText variant="caption" style={{ color: networkStatus === "offline" ? colors.warning : colors.textMuted }}>{dataStatus}</AppText></View> : null}
       </Card>
 
+      <Card variant="sunken" elevated={false} style={{ padding: 10, gap: 0 }}>
+        <View style={{ flexDirection: rowDirection, alignItems: "center", paddingHorizontal: 8, paddingBottom: 7 }}>
+          <AppText variant="overline" color="faint" style={{ width: 42 }}>{language === "ar" ? "سِت" : "SET"}</AppText>
+          <AppText variant="overline" color="faint" style={{ flex: 1 }}>{language === "ar" ? "الوزن" : "WEIGHT"}</AppText>
+          <AppText variant="overline" color="faint" style={{ width: 72 }}>{language === "ar" ? "العدات" : "REPS"}</AppText>
+          <View style={{ width: 24 }} />
+        </View>
+        {selected.sets.map((set) => {
+          const current = pendingSet?.id === set.id;
+          const displayWeight = set.isCompleted
+            ? set.weightKg === null
+              ? (selectedIsBodyweight ? (language === "ar" ? "وزن الجسم" : "BW") : "—")
+              : formatWeight(set.weightKg, settings.weightUnit)
+            : "—";
+          return (
+            <View key={set.id} style={{ flexDirection: rowDirection, alignItems: "center", minHeight: 43, paddingHorizontal: 8, borderRadius: 13, backgroundColor: current ? colors.primaryMuted : "transparent", borderTopWidth: set.setNumber === 1 ? 0 : 1, borderTopColor: colors.separator }}>
+              <AppText variant="smallBold" numeric color={current ? "primary" : set.isCompleted ? "default" : "faint"} style={{ width: 42 }}>{set.setNumber}</AppText>
+              <AppText variant="smallBold" numeric color={set.isCompleted ? "default" : "faint"} style={{ flex: 1 }}>{displayWeight}</AppText>
+              <AppText variant="smallBold" numeric color={set.isCompleted ? "default" : "faint"} style={{ width: 72 }}>{set.reps ?? "—"}</AppText>
+              {set.isCompleted ? <Check size={17} color={colors.success} /> : current ? <Dumbbell size={16} color={colors.primary} /> : <Circle size={15} color={colors.textFaint} />}
+            </View>
+          );
+        })}
+      </Card>
+
+      {timer.active ? (
+        <Card variant="dark" elevated={false} style={{ flexDirection: rowDirection, alignItems: "center", gap: 10, padding: 8, borderColor: colors.borderStrong }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "افتح مؤقت الراحة" : "Open rest timer"} onPress={() => setTimerOpen(true)} style={({ pressed }) => ({ flex: 1, minHeight: 48, flexDirection: rowDirection, alignItems: "center", gap: 12, borderRadius: 15, paddingHorizontal: 4, opacity: pressed ? 0.7 : 1 })}>
+            <View style={{ width: 44, height: 44, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><TimerReset size={20} color={colors.primaryInk} /></View>
+            <View style={{ flex: 1, minWidth: 0 }}><AppText variant="caption" style={{ color: colors.textOnDarkMuted }}>{language === "ar" ? "راحة · السِت الجاية" : "Rest · next set"}</AppText><AppText variant="title3" numeric style={{ color: colors.textOnDark }}>{formatElapsed(restRemaining)}</AppText></View>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={language === "ar" ? "زوّد 30 ثانية" : "Add 30 seconds"} onPress={() => void timer.addSeconds(30)} style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 12, borderRadius: 13, backgroundColor: colors.heroMuted, justifyContent: "center", opacity: pressed ? 0.68 : 1 })}><AppText variant="smallBold" numeric color="primary">+30s</AppText></Pressable>
+        </Card>
+      ) : null}
+
       <Card variant="raised" style={{ gap: compact ? 10 : 13, padding: compact ? 13 : 16 }}>
         {lastLogged ? (
           <>
@@ -518,24 +620,48 @@ setReps((current) => {
             </View>
           </>
         ) : pendingSet ? (
-          smartPresets.length > 0 && !manualEntryOpen ? (
+          smartPresets.length > 0 && !manualEntryOpen && primaryPreset ? (
             <>
-              <View style={{ gap: 2 }}><AppText variant="title3">{language === "ar" ? "اختار أداء السِت" : "Choose this set"}</AppText><AppText variant="small" color="muted">{settings.oneTapLoggingEnabled ? (language === "ar" ? "ضغطة واحدة وهتتسجل فورًا." : "One tap logs instantly.") : (language === "ar" ? "اختار وبعدين سجّل من تحت." : "Choose, then log from below.")}</AppText></View>
-              <View style={{ gap: 8 }}>
-                {smartPresets.map((preset) => {
-                  const selectedPreset = preset.kind === selectedPresetKind;
-                  const addsWeight = preset.kind === "progress" && baselinePreset?.weightKg !== null && baselinePreset?.weightKg !== undefined && preset.weightKg !== null && preset.weightKg > baselinePreset.weightKg;
-                  const title = preset.kind === "repeat" ? (language === "ar" ? "نفس الأداء" : "Repeat") : preset.kind === "progress" ? (addsWeight ? (language === "ar" ? "زوّد وزن" : "Add weight") : (language === "ar" ? "زوّد عدة" : "Add a rep")) : (language === "ar" ? "خفّ الوزن" : "Back-off");
-                  const description = preset.kind === "repeat" ? (language === "ar" ? "نفس آخر سِت ناجحة" : "Match the last successful set") : preset.kind === "progress" ? (addsWeight ? (language === "ar" ? `نقلة ${weightStep} ${settings.weightUnit}` : `A ${weightStep} ${settings.weightUnit} jump`) : (language === "ar" ? "عدة زيادة جوه الرينج" : "One more rep in range")) : (language === "ar" ? "وزن أقل وتحكم أحسن" : "Less load, more control");
-                  return (
-                    <Pressable key={preset.kind} accessibilityRole="button" onPress={() => choosePreset(preset)} style={({ pressed }) => ({ minHeight: compact ? 62 : 68, paddingHorizontal: 12, borderRadius: 18, flexDirection: rowDirection, alignItems: "center", gap: 11, backgroundColor: selectedPreset ? colors.primarySoft : colors.surfaceSunken, borderWidth: 1, borderColor: selectedPreset ? colors.primary : colors.border, opacity: pressed ? 0.7 : 1 })}>
-                      <View style={{ width: 38, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: selectedPreset ? colors.primary : colors.surfaceMuted }}>{preset.kind === "progress" ? <TrendingUp size={19} color={selectedPreset ? colors.primaryInk : colors.primary} /> : preset.kind === "backoff" ? <RotateCcw size={18} color={selectedPreset ? colors.primaryInk : colors.textMuted} /> : <Zap size={18} color={selectedPreset ? colors.primaryInk : colors.warning} />}</View>
-                      <View style={{ flex: 1, minWidth: 0 }}><AppText variant="smallBold">{title}</AppText><AppText variant="caption" color="muted" numberOfLines={1}>{description}</AppText></View>
-                      <View style={{ alignItems: "flex-end" }}><AppText variant="title3" numeric color={selectedPreset ? "primary" : "default"}>{preset.weightKg === null ? (language === "ar" ? "وزن الجسم" : "BW") : formatWeight(preset.weightKg, settings.weightUnit)}</AppText><AppText variant="smallBold" numeric color="muted">× {preset.reps}</AppText></View>
-                    </Pressable>
-                  );
-                })}
+              <View style={{ gap: 3 }}>
+                <AppText variant="overline" color="primary">{language === "ar" ? "اقتراحك للسِت دي" : "RECOMMENDED SET"}</AppText>
+                <AppText variant="small" color="muted">{recommendationReason}</AppText>
               </View>
+              <Card variant="sunken" elevated={false} style={{ padding: 14, gap: 13, borderColor: selectedPresetKind === primaryPreset.kind ? colors.primary : colors.border }}>
+                <View style={{ flexDirection: rowDirection, alignItems: "center", gap: 12 }}>
+                  <View style={{ width: 46, height: 46, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
+                    {primaryPreset.kind === "progress" ? <TrendingUp size={21} color={colors.primaryInk} /> : primaryPreset.kind === "backoff" ? <RotateCcw size={20} color={colors.primaryInk} /> : <Zap size={20} color={colors.primaryInk} />}
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                    <AppText variant="bodyStrong">{recommendationTitle}</AppText>
+                    <AppText variant="caption" color="muted">{settings.oneTapLoggingEnabled ? (language === "ar" ? "الضغط هيسجّل السِت فورًا" : "Tap to log this set instantly") : (language === "ar" ? "استخدمه وبعدها سجّل من الزر تحت" : "Apply it, then log from the bottom action")}</AppText>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <AppText variant="title2" numeric>{primaryPreset.weightKg === null ? (language === "ar" ? "وزن الجسم" : "BW") : formatWeight(primaryPreset.weightKg, settings.weightUnit)}</AppText>
+                    <AppText variant="smallBold" numeric color="primary">× {primaryPreset.reps}</AppText>
+                  </View>
+                </View>
+                <Button compact onPress={() => choosePreset(primaryPreset)} icon={<Check color={colors.primaryInk} size={18} />}>
+                  {settings.oneTapLoggingEnabled ? (language === "ar" ? "سجّل الاقتراح" : "Log recommendation") : (language === "ar" ? "استخدم الاقتراح" : "Use recommendation")}
+                </Button>
+              </Card>
+              {alternativePresets.length ? (
+                <View style={{ gap: 8 }}>
+                  <AppText variant="overline" color="muted">{language === "ar" ? "خيارات تانية" : "OTHER OPTIONS"}</AppText>
+                  <View style={{ flexDirection: rowDirection, gap: 8, flexWrap: "wrap" }}>
+                    {alternativePresets.map((preset) => {
+                      const selectedPreset = preset.kind === selectedPresetKind;
+                      const addsWeight = preset.kind === "progress" && baselinePreset?.weightKg !== null && baselinePreset?.weightKg !== undefined && preset.weightKg !== null && preset.weightKg > baselinePreset.weightKg;
+                      const title = preset.kind === "repeat" ? (language === "ar" ? "نفس الأداء" : "Repeat") : preset.kind === "progress" ? (addsWeight ? (language === "ar" ? "زوّد وزن" : "Add weight") : (language === "ar" ? "زوّد عدة" : "Add a rep")) : (language === "ar" ? "Back-off" : "Back-off");
+                      return (
+                        <Pressable key={preset.kind} onPress={() => choosePreset(preset)} style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 12, borderRadius: 14, backgroundColor: selectedPreset ? colors.primarySoft : colors.surfaceSunken, borderWidth: 1, borderColor: selectedPreset ? colors.primary : colors.border, flexDirection: rowDirection, alignItems: "center", gap: 7, opacity: pressed ? 0.68 : 1 })}>
+                          <AppText variant="caption" color={selectedPreset ? "primary" : "muted"}>{title}</AppText>
+                          <AppText variant="caption" numeric>{preset.weightKg === null ? "BW" : formatWeight(preset.weightKg, settings.weightUnit)} × {preset.reps}</AppText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
               {chosenPreset ? (
                 <View style={{ flexDirection: rowDirection, gap: 8 }}>
                   <View style={{ flex: 1, flexDirection: rowDirection, alignItems: "center", backgroundColor: colors.surfaceSunken, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 5 }}>
@@ -550,7 +676,7 @@ setReps((current) => {
                   </View>
                 </View>
               ) : null}
-              <Pressable onPress={() => { setManualEntryOpen(true); setSelectedPresetKind(null); }} style={({ pressed }) => ({ alignSelf: "center", flexDirection: rowDirection, alignItems: "center", gap: 6, padding: 7, opacity: pressed ? 0.62 : 1 })}><PenLine size={15} color={colors.textMuted} /><AppText variant="smallBold" color="muted">{language === "ar" ? "ضبط كامل للوزن والعدات" : "Full weight and rep controls"}</AppText></Pressable>
+              <Pressable onPress={() => { setManualEntryOpen(true); setSelectedPresetKind(null); }} style={({ pressed }) => ({ alignSelf: "center", flexDirection: rowDirection, alignItems: "center", gap: 6, padding: 7, opacity: pressed ? 0.62 : 1 })}><PenLine size={15} color={colors.textMuted} /><AppText variant="smallBold" color="muted">{language === "ar" ? "تعديل يدوي للوزن والعدات" : "Manual weight and rep adjustment"}</AppText></Pressable>
             </>
           ) : (
             <>
@@ -574,17 +700,12 @@ setReps((current) => {
         ) : (
           <View style={{ paddingVertical: spacing.lg, gap: spacing.md, alignItems: "center" }}>
             <View style={{ width: 58, height: 58, borderRadius: 20, backgroundColor: colors.successSoft, alignItems: "center", justifyContent: "center" }}><Check color={colors.success} size={30} /></View>
-            <AppText variant="title2" align="center">{language === "ar" ? "فحل — التمرين ده خلص" : "Strong — exercise complete"}</AppText>
+            <AppText variant="title2" align="center">{language === "ar" ? "التمرين ده خلص" : "Exercise complete"}</AppText>
             <Button style={{ alignSelf: "stretch" }} onPress={goNextExercise}>{selectedIndex === session.exercises.length - 1 ? (language === "ar" ? "إنهاء التمرينة" : "Finish workout") : (language === "ar" ? "التمرين التالي" : "Next exercise")}</Button>
             <Button style={{ alignSelf: "stretch" }} variant="secondary" onPress={() => void addExtraSet()}>{language === "ar" ? "سِت زيادة" : "Extra set"}</Button>
           </View>
         )}
       </Card>
-
-      <ActionSheet visible={preflightOpen} title={language === "ar" ? "نبدأ بالترتيب ده؟" : "Start in this order?"} description={language === "ar" ? "لو جهاز مشغول غيّر الترتيب بسرعة." : "If a machine is busy, reorder quickly."} onClose={() => setPreflightOpen(false)} dismissible={false}>
-        <Button onPress={() => setPreflightOpen(false)} icon={<Check color={colors.primaryInk} size={20} />}>{language === "ar" ? "ابدأ بالترتيب الحالي" : "Use current order"}</Button>
-        <Button variant="secondary" onPress={openReorder} icon={<Shuffle color={colors.primaryStrong} size={19} />}>{language === "ar" ? "رتّب تمرينة النهارده" : "Reorder today"}</Button>
-      </ActionSheet>
 
       <ActionSheet visible={reorderOpen} title={language === "ar" ? "رتّب تمرينة النهارده" : "Today’s order"} onClose={() => setReorderOpen(false)} scroll>
         <View style={{ gap: 8 }}>

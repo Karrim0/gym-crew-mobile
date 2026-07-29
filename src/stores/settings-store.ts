@@ -19,6 +19,7 @@ interface SettingsState {
   soundEnabled: boolean;
   notificationsEnabled: boolean;
   oneTapLoggingEnabled: boolean;
+  autoStartRestTimerEnabled: boolean;
   setLanguage: (language: Language) => void;
   setColorMode: (mode: ColorMode) => void;
   setWeightUnit: (unit: WeightUnit) => void;
@@ -28,6 +29,7 @@ interface SettingsState {
   setSoundEnabled: (enabled: boolean) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setOneTapLoggingEnabled: (enabled: boolean) => void;
+  setAutoStartRestTimerEnabled: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -42,6 +44,7 @@ export const useSettingsStore = create<SettingsState>()(
       soundEnabled: true,
       notificationsEnabled: true,
       oneTapLoggingEnabled: true,
+      autoStartRestTimerEnabled: true,
       setLanguage: (language) => set({ language }),
       setColorMode: (colorMode) => set({ colorMode }),
       setWeightUnit: (weightUnit) => set({ weightUnit }),
@@ -51,6 +54,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSoundEnabled: (soundEnabled) => set({ soundEnabled }),
       setNotificationsEnabled: (notificationsEnabled) => set({ notificationsEnabled }),
       setOneTapLoggingEnabled: (oneTapLoggingEnabled) => set({ oneTapLoggingEnabled }),
+      setAutoStartRestTimerEnabled: (autoStartRestTimerEnabled) => set({ autoStartRestTimerEnabled }),
     }),
     {
       name: "gym-crew:settings",
@@ -65,6 +69,7 @@ export const useSettingsStore = create<SettingsState>()(
         soundEnabled: state.soundEnabled,
         notificationsEnabled: state.notificationsEnabled,
         oneTapLoggingEnabled: state.oneTapLoggingEnabled,
+        autoStartRestTimerEnabled: state.autoStartRestTimerEnabled,
       }),
     },
   ),

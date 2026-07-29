@@ -3,7 +3,7 @@ const config = {
   name: "OVRLD",
   slug: "kareem-hanafy",
   owner: "kaghim0s-team",
-  version: "1.3.0",
+  version: "1.4.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: ["ovrld", "gymcrew"],
@@ -11,16 +11,16 @@ const config = {
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.karrim.gymcrew",
-    buildNumber: "11",
+    buildNumber: "12",
     infoPlist: {
       CFBundleAllowMixedLocalizations: true,
     },
   },
   android: {
     package: "com.karrim.gymcrew",
-    versionCode: 11,
+    versionCode: 12,
     adaptiveIcon: {
-      backgroundColor: "#090A0D",
+      backgroundColor: "#090B0D",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
@@ -44,8 +44,8 @@ const config = {
     [
       "expo-splash-screen",
       {
-        backgroundColor: "#090A0D",
-        dark: { backgroundColor: "#090A0D" },
+        backgroundColor: "#090B0D",
+        dark: { backgroundColor: "#090B0D" },
         image: "./assets/images/splash-icon.png",
         imageWidth: 196,
         resizeMode: "contain",

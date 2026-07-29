@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.4.0] - 2026-07-29
+
+### Final product direction
+- Reorganized the primary experience into Today, Plan, Train, Progress, and Profile while keeping Crew optional.
+- Adopted the OVRLD Volt product identity, updated the app icon/splash assets, and preserved dedicated light and dark theme surfaces.
+- Rebuilt Today as a state-driven destination for an active session, a scheduled workout, a recovery day, or a missing plan.
+- Rebuilt Train around resume, today’s workout, quick workout, repeat previous workout, and recent history.
+- Rebuilt Progress around period summaries, consistency rhythm, strongest performances, and workout history.
+
+### Gym Mode
+- Added an inline pre-workout review instead of an interruptive ordering prompt.
+- Added completed, current, and upcoming set rows directly above the current logger.
+- Replaced equal smart-choice cards with one primary recommendation and compact alternatives.
+- Added a dynamic fixed action showing the exact weight and reps that will be logged.
+- Added an optional automatic rest timer and a non-blocking rest mini-player with a +30 second action.
+- Kept manual weight and rep entry, quick adjustments, one-tap logging, undo, reordering, and exercise-list controls.
+
+### Reliability and release
+- Preserved the package identifiers, SQLite database, offline queue, authentication schemes, and existing data keys.
+- Added a Phase 9 product contract verifier, Windows verification entry point, and GitHub Actions release workflow.
+- Synchronized version 1.4.0 and build 12 across Expo, package metadata, runtime config, and Android native config.
+
 ## [1.3.0] - 2026-07-27
 
 ### Rebuilt

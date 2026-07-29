@@ -18,7 +18,7 @@ import { spacing } from "@/lib/theme/tokens";
 import type { Exercise } from "@/types";
 
 export default function ExercisePickerScreen() {
-  const { dayId, sessionId } = useLocalSearchParams<{ dayId?: string; sessionId?: string }>();
+  const { dayId, sessionId, start } = useLocalSearchParams<{ dayId?: string; sessionId?: string; start?: string }>();
   const router = useRouter();
   const { t, language, rowDirection } = useTranslation();
   const { colors } = useAppTheme();
@@ -45,8 +45,15 @@ export default function ExercisePickerScreen() {
     setAdding(exercise.id);
     setError(null);
     try {
-      if (sessionId) await addSessionExercise(sessionId, exercise);
-      else if (dayId) await addSplitExercise({ splitDayId: dayId, exercise });
+      if (sessionId) {
+        await addSessionExercise(sessionId, exercise);
+        if (start === "1") {
+          router.replace({ pathname: "/workout/[sessionId]", params: { sessionId, prepare: "1" } });
+          return;
+        }
+      } else if (dayId) {
+        await addSplitExercise({ splitDayId: dayId, exercise });
+      }
       router.back();
     } catch (caught) {
       setError(friendlyError(caught));

@@ -1,31 +1,39 @@
 # OVRLD Mobile
 
-OVRLD is an offline-first React Native performance-training app built with Expo Router,
-TypeScript, Supabase, and SQLite. It supports solo athletes and workout crews,
-while keeping the in-gym flow focused on quick weight and reps logging.
+OVRLD is an offline-first personal training operating system built with React Native,
+Expo Router, TypeScript, Supabase, and SQLite. The individual athlete experience is
+the product core; workout crews are an optional social layer.
 
-## Current release candidate: 1.2.0
+## Current release candidate: 1.4.0 (build 12)
 
-### OVRLD product experience
+### Product architecture
 
-- Obsidian Ember visual system with an ember-orange accent and warm-white typography.
-- Alexandria for Arabic and interface copy; Inter for weights, reps, timers, and metrics.
-- Four primary destinations: Home, Workout, Progress, and Profile.
-- Locally bundled workout photography, a new adaptive icon, and an OVRLD splash mark.
+- Five primary destinations: Today, Plan, Train, Progress, and Profile.
+- Today adapts to a scheduled workout, an open session, a recovery day, or a missing plan.
+- Plan contains the weekly schedule, active split, templates, and exercise library.
+- Train supports today’s workout, active-session resume, quick workout, and repeat previous workout.
+- Progress covers consistency, workout history, strongest performances, volume, and streaks.
+- Profile contains Crew, notifications, language, appearance, training preferences, and sync controls.
+
+### OVRLD product identity
+
+- OVRLD Volt `#C8FF3D` is the single focused brand accent.
+- Dedicated dark and light theme surfaces.
+- Alexandria for Arabic/interface copy and Inter for weights, reps, timers, and metrics.
 - Arabic Egyptian and English with RTL/LTR layouts.
-- Solo workspace or shared crew with invite code and member roles.
-- Personal split, starter templates, weekly schedule, and exercise editing.
-- Consistent loading, empty, offline, sync, and recoverable error states.
+- Updated adaptive icon, favicon, and splash mark.
 
-### Click-first Gym Mode
+### Gym Mode
 
-- First-time exercises ask for weight and reps once.
-- Later sets offer Repeat, Progress, and Back-off presets derived from recent performance.
-- Optional one-tap logging records a preset immediately.
-- Manual editing, notes, undo, extra sets, reorder, and rest timer remain available.
-- One exercise stays on screen at a time with large one-hand controls.
-- Live elapsed time and local-save/sync status.
-- Duplicate-tap protection and atomic local persistence after every action.
+- Inline pre-workout review instead of an interruptive ordering prompt.
+- Compact session and exercise context.
+- Completed, current, and upcoming set rows.
+- One primary performance recommendation with compact alternatives.
+- Manual weight/repetition entry and quick load controls.
+- Dynamic fixed logging action that displays the exact values being saved.
+- Optional one-tap logging, undo, extra sets, notes, reordering, and exercise selection.
+- Optional automatic rest timer with a non-blocking mini-player.
+- Live local-save and sync status.
 
 ### Offline reliability
 
@@ -69,25 +77,26 @@ npm run lint
 npx expo start --dev-client --lan --clear
 ```
 
-## Release quality gate
+## Phase 9 quality gate
 
 ```bash
-npm run phase8:check
+npm run phase9:check
 ```
 
 On Windows:
 
 ```bat
-call VERIFY_PHASE8_PRODUCT.cmd
+call VERIFY_PHASE9_FINAL.cmd
 ```
 
-The Phase 8 gate verifies:
+The Phase 9 gate verifies:
 
-- the polished light/dark theme and glass-surface contract;
-- smart-set presets, bodyweight guards, and direct load jumps;
-- Phase 4 offline and null-safety regressions;
-- version `1.2.0` / build `10` synchronization;
-- TypeScript, ESLint, Expo dependency alignment, and public config resolution.
+- release identity `1.4.0` / build `12`;
+- Today / Plan / Train / Progress / Profile architecture;
+- Gym Mode preflight, set rows, recommendations, fixed action, and rest mini-player;
+- smart-set recommendation behavior and bodyweight guards;
+- offline reliability, null safety, retry, and idempotency regressions;
+- TypeScript, ESLint, Expo dependency alignment, public config, and Android export.
 
 ## Preview APK
 
@@ -96,7 +105,8 @@ npx eas-cli@latest build --platform android --profile preview --clear-cache
 ```
 
 The preview profile produces a standalone APK for physical-device testing.
-EAS requires a clean committed tree before starting a build.
+Do not tag the release until dark/light, Arabic/English, Gym Mode, force-close,
+and offline-to-online synchronization checks pass on a physical device.
 
 ## Production Android build
 
@@ -126,9 +136,9 @@ supabase/migrations     Reproducible database migration chain
 - Expo owner: `kaghim0s-team`
 - Android package: `com.karrim.gymcrew`
 - iOS bundle identifier: `com.karrim.gymcrew`
-- App version: `1.0.0`
-- Android version code: `8`
-- iOS build number: `8`
+- App version: `1.4.0`
+- Android version code: `12`
+- iOS build number: `12`
 
-See `docs/PHASE_6_QA_RELEASE.md` and
+See `docs/PHASE_9_FINAL_PRODUCT_RELEASE.md` and
 `docs/PHYSICAL_DEVICE_RELEASE_CHECKLIST.md` for the final handoff gates.

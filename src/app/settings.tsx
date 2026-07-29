@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { Alert, Linking, Switch, View } from "react-native";
+import { Linking, Switch, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
   Scale,
   Gauge,
   Smartphone,
+  TimerReset,
   Sun,
   ShieldAlert,
   Vibrate,
@@ -27,6 +28,7 @@ import { Card } from "@/components/ui/card";
 import { Pill } from "@/components/ui/pill";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { ActionSheet } from "@/components/ui/action-sheet";
 import { useTranslation } from "@/lib/localization/use-translation";
 import { useAppTheme } from "@/lib/theme/use-app-theme";
 import {
@@ -69,6 +71,7 @@ export default function SettingsScreen() {
   const [permission, setPermission] = useState<NotificationPermissionState>("undetermined");
   const [testing, setTesting] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
+  const [signOutOpen, setSignOutOpen] = useState(false);
 
   const refreshPermission = useCallback(async () => setPermission(await getNotificationPermissionState()), []);
   useFocusEffect(useCallback(() => { void refreshPermission(); }, [refreshPermission]));
@@ -161,6 +164,14 @@ export default function SettingsScreen() {
         <View style={{ height: 1, backgroundColor: colors.border }} />
         <SettingRow icon={<Vibrate color={colors.primary} />} title={t("settings.haptics")}><Switch value={settings.hapticsEnabled} onValueChange={settings.setHapticsEnabled} trackColor={{ false: colors.surfaceStrong, true: colors.primarySoft }} thumbColor={settings.hapticsEnabled ? colors.primary : colors.textFaint} /></SettingRow>
         <View style={{ height: 1, backgroundColor: colors.border }} />
+        <SettingRow
+          icon={<TimerReset color={colors.primary} />}
+          title={language === "ar" ? "ابدأ الراحة تلقائيًا" : "Auto-start rest timer"}
+          description={language === "ar" ? "بعد تسجيل السِت يبدأ المؤقت من غير ما يعطلك." : "Start the timer immediately after a set is logged."}
+        >
+          <Switch value={settings.autoStartRestTimerEnabled} onValueChange={settings.setAutoStartRestTimerEnabled} trackColor={{ false: colors.surfaceStrong, true: colors.primarySoft }} thumbColor={settings.autoStartRestTimerEnabled ? colors.primary : colors.textFaint} />
+        </SettingRow>
+        <View style={{ height: 1, backgroundColor: colors.border }} />
         <SettingRow icon={<Smartphone color={colors.primary} />} title={t("settings.restTimer")} />
         <View style={{ flexDirection: rowDirection, flexWrap: "wrap", gap: 8 }}>{[60, 90, 120, 180, 240, 300].map((seconds) => <Pill key={seconds} selected={settings.defaultRestSeconds === seconds} onPress={() => settings.setDefaultRestSeconds(seconds)}>{seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}</Pill>)}</View>
         <Button variant="secondary" loading={testing} icon={<BellRing color={colors.primary} size={18} />} onPress={() => void testNotification()}>{language === "ar" ? "جرّب التنبيه" : "Test notification"}</Button>
@@ -231,8 +242,13 @@ export default function SettingsScreen() {
         </SettingRow>
       </Card>
 
-      <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => Alert.alert(t("settings.signOut"), language === "ar" ? "متأكد إنك عايز تخرج؟" : "Are you sure?", [{ text: t("common.cancel"), style: "cancel" }, { text: t("settings.signOut"), style: "destructive", onPress: () => void signOut() }])}>{t("settings.signOut")}</Button>
+      <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => setSignOutOpen(true)}>{t("settings.signOut")}</Button>
       <AppText variant="caption" color="faint" align="center">OVRLD · {appConfig.version}</AppText>
+
+      <ActionSheet visible={signOutOpen} title={t("settings.signOut")} description={language === "ar" ? "بيانات التمرين المحفوظة محليًا هتفضل آمنة على الجهاز." : "Locally saved workout data stays safe on this device."} onClose={() => setSignOutOpen(false)}>
+        <Button variant="secondary" onPress={() => setSignOutOpen(false)}>{t("common.cancel")}</Button>
+        <Button variant="danger" icon={<LogOut color={colors.white} />} onPress={() => void signOut()}>{t("settings.signOut")}</Button>
+      </ActionSheet>
     </Screen>
   );
 }

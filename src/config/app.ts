@@ -1,9 +1,9 @@
 export const appConfig = {
   name: "OVRLD",
   slug: "kareem-hanafy",
-  version: "1.3.0",
+  version: "1.4.0",
   scheme: "ovrld",
-  buildNumber: 11,
+  buildNumber: 12,
 } as const;
 
 export const env = {

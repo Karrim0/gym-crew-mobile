@@ -55,11 +55,11 @@ export const translations = {
       continue: "يلا نكمل",
     },
     tabs: {
-      home: "الرئيسية",
-      split: "جدولي",
-      workout: "التمرين",
+      home: "النهارده",
+      split: "الخطة",
+      workout: "تمرّن",
       crew: "الجروب",
-      progress: "تقدمي",
+      progress: "التقدم",
     },
     home: {
       hello: "أهلاً يا %{name}",
@@ -226,7 +226,7 @@ export const translations = {
       inviteCode: "Invite code",
       continue: "Continue",
     },
-    tabs: { home: "Home", split: "My split", workout: "Workout", crew: "Crew", progress: "Progress" },
+    tabs: { home: "Today", split: "Plan", workout: "Train", crew: "Crew", progress: "Progress" },
     home: {
       hello: "Hey, %{name}",
       ready: "Ready to keep moving?",

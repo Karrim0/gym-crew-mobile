@@ -115,7 +115,7 @@ export default function SplitScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-      <AppHeader title={t("split.title")} subtitle={language === "ar" ? "جدول جاهز، بس كل تفصيلة فيه بتاعتك." : "Start ready. Customize everything."} />
+      <AppHeader title={language === "ar" ? "الخطة" : "Plan"} subtitle={language === "ar" ? "رتّب أسبوعك وخلي كل تمرينة واضحة قبل ما تبدأ." : "Organize your week and make every workout clear before it starts."} />
 
       {needsSetup ? (
         <SetupChooser onManual={() => void apply("manual")} onStarter={() => setTemplatesOpen(true)} loading={working} />
@@ -124,7 +124,7 @@ export default function SplitScreen() {
           <Card variant="dark" style={{ gap: spacing.lg, padding: spacing.xl, borderColor: colors.borderStrong }}>
             <View pointerEvents="none" style={{ position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: colors.glow, end: -80, bottom: -95 }} />
             <View style={{ flexDirection: rowDirection, alignItems: "center", justifyContent: "space-between" }}>
-              <View style={{ gap: 4 }}><AppText variant="overline" color="primary">TRAINING PLAN</AppText><AppText variant="title2" style={{ color: colors.textOnDark }}>{language === "ar" ? "أسبوعك على مزاجك" : "Your week, your way"}</AppText></View>
+              <View style={{ gap: 4 }}><AppText variant="overline" color="primary">CURRENT PLAN</AppText><AppText variant="title2" style={{ color: colors.textOnDark }}>{language === "ar" ? "خطتك الحالية" : "Your current plan"}</AppText></View>
               <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><CalendarDays color={colors.primaryInk} size={24} /></View>
             </View>
             <View style={{ flexDirection: rowDirection, gap: 9 }}>
@@ -140,7 +140,7 @@ export default function SplitScreen() {
             </View>
           </Card>
 
-          <SectionHeader title={language === "ar" ? "أيام الأسبوع" : "Week days"} />
+          <SectionHeader title={language === "ar" ? "الأسبوع الحالي" : "Current week"} />
           <View style={{ gap: 10 }}>{orderedSplit.map((day) => <DayCard key={day.id} day={day} onPress={() => router.push(`/split-day/${day.id}`)} />)}</View>
         </>
       )}
